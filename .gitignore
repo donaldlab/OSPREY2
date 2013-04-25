@@ -1,0 +1,39 @@
+*.class
+*.jar
+
+.*
+!.gitignore
+*~
+
+# eclipse
+.project
+.classpath
+.metadata
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+
+# netbeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+
+# os x
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Trashes
+
+# windows
+Thumbs.db
+
