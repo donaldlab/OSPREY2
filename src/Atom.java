@@ -53,6 +53,7 @@
 //	   ISG		  Ivelin Georgiev	   Duke University			   ivelin.georgiev@duke.edu
 //     KER        Kyle E. Roberts       Duke University         ker17@duke.edu
 //     PGC        Pablo Gainza C.       Duke University         pablo.gainza@duke.edu
+//	  MAH           Mark A. Hallen	  Duke University               mah43@duke.edu
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -100,18 +101,18 @@ public class Atom implements Serializable {
 	boolean	selected = true;
 	String	name;									// the atom name ie. CA, CB, CG, ...
 	String  segID = "";			// the atom segment id, specifically included for the molecular replacement proj
-	float	charge=0.0f;	// atomic charge
+	double	charge=0.0f;	// atomic charge
 	int	radius = 170;		// vdw radii in pm (100pm=1A)
 	double	mass;				// atomic mass
-	float	coord[] = new float[3];		// atomic coordinates
+	double	coord[] = new double[3];		// atomic coordinates
 	boolean isBBatom = false;
-        float BFactor;
+        double BFactor;
 
 
 	Atom(){
 	}
 
-	Atom(String atomName, float xpos, float ypos, float zpos){
+	Atom(String atomName, double xpos, double ypos, double zpos){
 		name = atomName;
 		setProperties();
 		coord[0] = xpos;
@@ -121,7 +122,7 @@ public class Atom implements Serializable {
 		isBBatom = setIsBBatom();
 	}
 
-	Atom(String atomName, float xpos, float ypos, float zpos, String ffType){
+	Atom(String atomName, double xpos, double ypos, double zpos, String ffType){
 		name = atomName;
 		setProperties();
 		coord[0] = xpos;
@@ -132,7 +133,7 @@ public class Atom implements Serializable {
 		isBBatom = setIsBBatom();
 	}
 
-	Atom(String atomName, float xpos, float ypos, float zpos, float thecharge){
+	Atom(String atomName, double xpos, double ypos, double zpos, double thecharge){
 		name = atomName;
 		setProperties();
 		coord[0] = xpos;
@@ -143,7 +144,7 @@ public class Atom implements Serializable {
 		isBBatom = setIsBBatom();
 	}
 	
-	Atom(String atomName, float xpos, float ypos, float zpos, float thecharge, String ffType){	
+	Atom(String atomName, double xpos, double ypos, double zpos, double thecharge, String ffType){	
 		name = atomName;
 		setProperties();
 		coord[0] = xpos;
@@ -155,7 +156,7 @@ public class Atom implements Serializable {
 		isBBatom = setIsBBatom();
 	}
 
-        Atom(float coor[]){
+        Atom(double coor[]){
             coord = coor;
         }
 
@@ -170,7 +171,10 @@ public class Atom implements Serializable {
 	// RHL I don't know where the radii values come from but they are good estimates
 	//  usually atoms will be assigned better information from a forcefield
 	private void setProperties(){
+            
 		forceFieldType = "?";
+                String nameUpper = name.toUpperCase();
+                
 		if ( name.indexOf("Ac") != -1 ){
 			elementNumber = 89;
 			radius = 295;
@@ -737,86 +741,86 @@ public class Atom implements Serializable {
 		}
 		//The radii for C, H, N, O, P, S were changed to those used by the Richardsons' PROBE;
 		//		The old radii are commented out to the side
-		else if( name.toUpperCase().indexOf("C") == 0 ){
+		else if( nameUpper.indexOf("C") == 0 ){
 			radius = 165; //radius = 180;
 			elementNumber = 6;
 			mass = 12.01;
 			elementType = "C";
 		}
-		else if( (name.toUpperCase().indexOf("H") == 0) || 
-				( (name.toUpperCase().indexOf("H") == 1) && ((name.charAt(0)>='0') && (name.charAt(0)<='9')) ) ){
+		else if( (nameUpper.indexOf("H") == 0) || 
+				( (nameUpper.indexOf("H") == 1) && ((name.charAt(0)>='0') && (name.charAt(0)<='9')) ) ){
 			radius = 100; //radius = 80;
 			elementNumber = 1;
 			mass = 1;
 			elementType = "H";
 		}
-		else if( name.toUpperCase().indexOf("N") == 0 ){
+		else if( nameUpper.indexOf("N") == 0 ){
 			radius = 155; //radius = 170;
 			elementNumber = 7;
 			mass = 14.01;
 			elementType = "N";
 		}
-		else if( name.toUpperCase().indexOf("O") == 0 ){
+		else if( nameUpper.indexOf("O") == 0 ){
 			radius = 140; //radius = 170;
 			elementNumber = 8;
 			mass = 16;
 			elementType = "O";
 		}
-		else if( name.toUpperCase().indexOf("B") == 0 ){
+		else if( nameUpper.indexOf("B") == 0 ){
 			radius = 208;
 			elementNumber = 5;
 			mass = 10.81;
 			elementType = "B";
 		}
-		else if( name.toUpperCase().indexOf("I") == 0 ){
+		else if( nameUpper.indexOf("I") == 0 ){
 			radius = 350;
 			elementNumber = 53;
 			mass = 126.9;
 			elementType = "I";
 		}
-		else if( name.toUpperCase().indexOf("F") == 0 ){
+		else if( nameUpper.indexOf("F") == 0 ){
 			radius = 160;
 			elementNumber = 9;
 			mass = 19.0;
 			elementType = "F";
 		}
-		else if( name.toUpperCase().indexOf("P") == 0 ){
+		else if( nameUpper.indexOf("P") == 0 ){
 			radius = 180; //radius = 259;
 			elementNumber = 15;
 			mass = 30.97;
 			elementType = "P";
 		}
-		else if( name.toUpperCase().indexOf("K") == 0 ){
+		else if( nameUpper.indexOf("K") == 0 ){
 			radius = 332;
 			elementNumber = 19;
 			mass = 39.1;
 			elementType = "K";
 		}
-		else if( name.toUpperCase().indexOf("S") == 0 ){
+		else if( nameUpper.indexOf("S") == 0 ){
 			radius = 180; //radius = 255;
 			elementNumber = 16;
 			mass = 32.07;
 			elementType = "S";
 		}
-		else if( name.toUpperCase().indexOf("U") == 0 ){
+		else if( nameUpper.indexOf("U") == 0 ){
 			radius = 242;
 			elementNumber = 92;
 			mass = 238;
 			elementType = "U";
 		}
-		else if( name.toUpperCase().indexOf("V") == 0 ){
+		else if( nameUpper.indexOf("V") == 0 ){
 			radius = 332;
 			elementNumber = 23;
 			mass = 50.94;
 			elementType = "V";
 		}
-		else if( name.toUpperCase().indexOf("W") == 0 ){
+		else if( nameUpper.indexOf("W") == 0 ){
 			radius = 342;
 			elementNumber = 74;
 			mass = 183.9;
 			elementType = "W";
 		}
-		else if( name.toUpperCase().indexOf("Y") == 0 ){
+		else if( nameUpper.indexOf("Y") == 0 ){
 			radius = 445;
 			elementNumber = 39;
 			mass = 88.91;
@@ -942,8 +946,36 @@ public class Atom implements Serializable {
 				theta = 270.0 + Math.atan( Math.abs( zComponent / 
 					yComponent ) ) * R2D;
 		}
+                
 		return( theta );
 	}
+        
+        
+        
+        //returning (sin, cos)
+        //the formula simplifies considerably in this case...
+        public double[] angleAboutXAxisSC(){
+                return angleAboutAxisSC(coord[1],coord[2]);
+        }
+        
+        public double[] angleAboutAxisSC(double coord1, double coord2) {
+		double norm = Math.sqrt( coord1 * coord1 + coord2 * coord2 );
+                if(norm==0)
+                    return new double[] {0,1};//return angle of 0 for the origin by convention
+                else {
+                    //normalize components for use as sin, cos
+                    double yComponent = coord1 / norm;
+                    double zComponent = coord2 / norm;
+                    return new double[] {yComponent,-zComponent};
+                }
+	}
+        
+        
+        
+        
+        
+        
+        
 
 	// This returns the right handed rotation angle around the +y
 	//  axis where the -x axis is the 0
@@ -977,6 +1009,10 @@ public class Atom implements Serializable {
 		return( theta );
 	}
 
+        public double[] angleAboutYAxisSC(){
+                return angleAboutAxisSC(coord[2],coord[0]);
+        }
+        
 	// This returns the right handed rotation angle around the +z
 	//  axis where the +x axis is the 0
 	// This was not written by me, but I have checked it
@@ -1005,9 +1041,13 @@ public class Atom implements Serializable {
 			else if ( ( yComponent < 0 ) && ( xComponent > 0 ) )
 				theta = 270.0 + Math.atan( Math.abs( xComponent / 
 					yComponent ) ) * R2D;
-		}
+		}               
 		return( theta );
 	}
+        
+        public double[] angleAboutZAxisSC(){
+                return angleAboutAxisSC(coord[1],-coord[0]);
+        }
 
 	// Returns the angle (in degrees) made between atom1-atom2-thisatom
 	// This was not written by me, but I have checked it
@@ -1112,6 +1152,62 @@ public class Atom implements Serializable {
 		double D2R = 0.01745329251994329576;
     return(D2R*torsion(atom1,atom2,atom3));
 	}
+        
+        
+        //return (sin,cos) for torsion--avoid wasting time on inverse trig
+        //(for quick application of dihedrals)
+    public double[] torsionSinCos(Atom atom1, Atom atom2, Atom atom3){
+                    double xij, yij, zij;
+                    double xkj, ykj, zkj;
+                    double xkl, ykl, zkl;
+                    double dx, dy, dz;
+                    double gx, gy, gz;
+                    double bi, bk;
+                    double ct, d, ap, app, bibk;
+
+        xij = atom1.coord[0] - atom2.coord[0];
+        yij = atom1.coord[1] - atom2.coord[1];
+        zij = atom1.coord[2] - atom2.coord[2];
+        xkj = atom3.coord[0] - atom2.coord[0];
+        ykj = atom3.coord[1] - atom2.coord[1];
+        zkj = atom3.coord[2] - atom2.coord[2];
+        xkl = atom3.coord[0] - coord[0];
+        ykl = atom3.coord[1] - coord[1];
+        zkl = atom3.coord[2] - coord[2];
+
+                    // d = ij cross kj
+                    // g = kl cross kj
+        dx = yij * zkj - zij * ykj;
+        dy = zij * xkj - xij * zkj;
+        dz = xij * ykj - yij * xkj;
+        gx = zkj * ykl - ykj * zkl;
+        gy = xkj * zkl - zkj * xkl;
+        gz = ykj * xkl - xkj * ykl;
+
+        bi = dx * dx + dy * dy + dz * dz;  // magnitude of d
+        bk = gx * gx + gy * gy + gz * gz;  // magnitude of g
+        ct = dx * gx + dy * gy + dz * gz;  // d dot g
+                    bibk = bi * bk;
+                    if (bibk < 1.0e-6)	
+                            return new double[] {0,1};//angle==0
+        ct = ct / Math.sqrt(bibk);
+        if(ct < -1.0)
+          ct = -1.0;
+        else if(ct > 1.0)
+          ct = 1.0;
+
+
+        d  = xkj*(dz*gy-dy*gz) + ykj*(dx*gz-dz*gx) + zkj*(dy*gx-dx*gy);
+        if(d < 0.0)
+            return new double[] {-Math.sqrt(1-ct*ct),-ct};
+        else
+            return new double[] {Math.sqrt(1-ct*ct),-ct};
+    }
+        
+        
+        
+        
+        
 
 	//Checks if this is a backbone atom (the atom name is one of N, CA, C, O, OXT, H, H1, H2, H3)
 	public boolean setIsBBatom(){
@@ -1170,13 +1266,13 @@ public class Atom implements Serializable {
 				bond[i] = a.bond[i];
 		}
 		
-		coord = new float[3];
+		coord = new double[3];
 		for(int i=0; i<3;i++)
 			coord[i] = a.coord[i];
 		
 	}
 
-	public void setCoords(float xpos, float ypos, float zpos){
+	public void setCoords(double xpos, double ypos, double zpos){
 		coord[0] = xpos;
 		coord[1] = ypos;
 		coord[2] = zpos;

@@ -178,6 +178,10 @@ public class ExpansionQueue {
 	 public QueueNode getMin(){
          return thequeue.poll();
 	}
+
+         public int getNumNodes(){
+             return thequeue.size();
+         }
 	
 	//Checks if the two given nodes have the same partially assigned conformation
 	private boolean checkConf(QueueNode node1, QueueNode node2){

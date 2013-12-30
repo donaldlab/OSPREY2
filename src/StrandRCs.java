@@ -247,7 +247,7 @@ public class StrandRCs extends StrandRotamers {
                 }
             }
 
-            float CACoord[] = localRes.getAtomByName("CA").coord;
+            double CACoord[] = localRes.getAtomByName("CA").coord;
 
             for(int a=0;a<localRes.atom.length;a++){
                 Atom localAt = localRes.atom[a];
@@ -325,7 +325,7 @@ public class StrandRCs extends StrandRotamers {
 
                 int offset = 3*localRes.atom[a].moleculeAtomNumber;
 
-                float WTCoord[] = WTRes[resNum].atom[a].coord;
+                double WTCoord[] = WTRes[resNum].atom[a].coord;
 
                 System.arraycopy(WTCoord, 0, m.actualCoordinates, offset, 3);
             }
@@ -367,7 +367,7 @@ public class StrandRCs extends StrandRotamers {
                     }
 
                     RotMatrix r = new RotMatrix();
-                    float CACoord[] = m.getActualCoord( localRes.getAtomNameToMolnum("CA") );
+                    double CACoord[] = m.getActualCoord( localRes.getAtomNameToMolnum("CA") );
 
                     //First put the atoms in in the original PDB orientation
                     for(int a=0;a<localRes.numberOfAtoms;a++){

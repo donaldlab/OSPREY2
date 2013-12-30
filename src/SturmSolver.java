@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	SturmSolver.java
@@ -67,8 +67,9 @@ Volume 25, Issue 4, Pages 510 - 528 (2004)
  * from "Graphics Gems", Academic Press, 1990
 */
 
-public class SturmSolver {
+import java.io.Serializable;
 
+public class SturmSolver implements Serializable{
 
 
     final int PRINT_LEVEL=0;

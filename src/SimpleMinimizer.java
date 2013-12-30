@@ -134,14 +134,14 @@ public class SimpleMinimizer implements Serializable {
 		//  ie. the first x entries in a row of 
 		//  ligDihedralDistal are valid atoms
 
-	float initialAngleStepSize = 1.0f;
+	double initialAngleStepSize = 1.0f;
 		// initial angular step size (in degrees)
 	double strDihedDiff[][] = null;
 	//double sysDihedDiff[] = null;
 		// current finite difference step for the given dihedral
 	//double ligDihedDiff[] = null;
 		// current finite difference step for the given dihedral
-	float tempCoords[] = null;
+	double tempCoords[] = null;
 		// temporary holding location for coordinates as we
 		//  muck with a dihedral, note that the size of this
 		//  array is defined by MAX_NUM_ATOMS_DISTAL * 3
@@ -162,10 +162,10 @@ public class SimpleMinimizer implements Serializable {
 	double maxMovement = 9.0;
 		// maximum degrees by which a torsion can
 		//  cumulatively change
-	float RotStep = 0.25f;
+	double RotStep = 0.25f;
 		// step size for the rigid rotation
 		//  of the ligand
-	float TransStep = 0.10f;
+	double TransStep = 0.10f;
 		// step size in � for the rigid ligand
 		//  translation
 	double MaxTrans = 1.2;
@@ -286,7 +286,7 @@ public class SimpleMinimizer implements Serializable {
 		/*sysDihedralAtNums = new int[numSysDihedrals][4];
 		sysDihedralDistal = new int[numSysDihedrals][MAX_NUM_ATOMS_DISTAL];
 		sysNumAtomsDistal = new int[numSysDihedrals];*/
-		tempCoords = new float[MAX_NUM_ATOMS_DISTAL * 3];
+		tempCoords = new double[MAX_NUM_ATOMS_DISTAL * 3];
 
 		// Count number of flexible residues
 		numFlexRes = new int[numberOfStrands];
@@ -476,7 +476,7 @@ public class SimpleMinimizer implements Serializable {
 	}
 	
 	// Sets the initial angle step size
-	public void setInitialAngleStepSize(float num){	
+	public void setInitialAngleStepSize(double num){	
 		initialAngleStepSize = num;
 	}
 	
@@ -773,7 +773,7 @@ public class SimpleMinimizer implements Serializable {
 		// [5] atom4 (the distal atom of the dihedral)
 		// ...
 		// [n+1] atomn
-		// the result is a float array where the first
+		// the result is a double array where the first
 		//  three values are the axis and the fourth
 		//  is the torque
 		// interestingly since our force is kcal/mol/A
@@ -829,7 +829,7 @@ public class SimpleMinimizer implements Serializable {
 	//Sets up and performs ligand translation/rotation
 	/*private void doLigTransRot(double ligTorque[], double ligTrans[], double lligRotStep, double lligTransStep, double lligMaxTrans){
 		
-		float bckpLigCoords[] = backupLigCoord(); //backup actual ligand coordinates
+		double bckpLigCoords[] = backupLigCoord(); //backup actual ligand coordinates
 		double initE[] = a96ff.calculateTotalEnergy(m.actualCoordinates, -1); //compute energy before translation/rotation
 	
 		a96ff.calculateGradient(-1); //calculate the gradient (perhaps eventually just calculate part of the gradient)
@@ -845,7 +845,7 @@ public class SimpleMinimizer implements Serializable {
 
 	protected void doStrTransRot(int strNumber, double strTorque[], double strTrans[], double RotStep, double TransStep, double MaxTrans){
 		
-		float bckpStrCoords[] = backupStrCoord(strNumber); //backup actual ligand coordinates
+		double bckpStrCoords[] = backupStrCoord(strNumber); //backup actual ligand coordinates
 		double initE[] = a96ff.calculateTotalEnergy(m.actualCoordinates, -1); //compute energy before translation/rotation
 	
 		a96ff.calculateGradient(-1); //calculate the gradient (perhaps eventually just calculate part of the gradient)
@@ -981,10 +981,10 @@ public class SimpleMinimizer implements Serializable {
 		}
 		
 		// compute the translation to get us to the new COM
-		float theTranslation[] = new float[3];
-		theTranslation[0] = (float)(strStartCOM[strNumber][0] + totalMovement[0] - strCurCOM[strNumber][0]);
-		theTranslation[1] = (float)(strStartCOM[strNumber][1] + totalMovement[1] - strCurCOM[strNumber][1]);
-		theTranslation[2] = (float)(strStartCOM[strNumber][2] + totalMovement[2] - strCurCOM[strNumber][2]);
+		double theTranslation[] = new double[3];
+		theTranslation[0] = (double)(strStartCOM[strNumber][0] + totalMovement[0] - strCurCOM[strNumber][0]);
+		theTranslation[1] = (double)(strStartCOM[strNumber][1] + totalMovement[1] - strCurCOM[strNumber][1]);
+		theTranslation[2] = (double)(strStartCOM[strNumber][2] + totalMovement[2] - strCurCOM[strNumber][2]);
 
 		// update the current COM
 		strCurCOM[strNumber][0] = strStartCOM[strNumber][0]+totalMovement[0];
@@ -1003,7 +1003,7 @@ public class SimpleMinimizer implements Serializable {
 			// The last parameter says not to update the atom coordintes,
 			//  only update the actualCoords
 			if (Math.abs(RotStep)>0.0001)   // this should be in
-				m.rotateStrandAroundCOM(strNumber,(float)strTorque[0],(float)strTorque[1],(float)strTorque[2],(float)RotStep,false);
+				m.rotateStrandAroundCOM(strNumber,(double)strTorque[0],(double)strTorque[1],(double)strTorque[2],(double)RotStep,false);
 		}
 		// Apply translation, don't update atom coordinates
 		// The last parameter says not to update the atom coordintes,
@@ -1053,10 +1053,10 @@ public class SimpleMinimizer implements Serializable {
 		}
 		
 		// compute the translation to get us to the new COM
-		float theTranslation[] = new float[3];
-		theTranslation[0] = (float)(ligStartCOM[0] + totalMovement[0] - ligCurCOM[0]);
-		theTranslation[1] = (float)(ligStartCOM[1] + totalMovement[1] - ligCurCOM[1]);
-		theTranslation[2] = (float)(ligStartCOM[2] + totalMovement[2] - ligCurCOM[2]);
+		double theTranslation[] = new double[3];
+		theTranslation[0] = (double)(ligStartCOM[0] + totalMovement[0] - ligCurCOM[0]);
+		theTranslation[1] = (double)(ligStartCOM[1] + totalMovement[1] - ligCurCOM[1]);
+		theTranslation[2] = (double)(ligStartCOM[2] + totalMovement[2] - ligCurCOM[2]);
 
 		// update the current COM
 		ligCurCOM[0] = ligStartCOM[0]+totalMovement[0];
@@ -1075,7 +1075,7 @@ public class SimpleMinimizer implements Serializable {
 			// The last parameter says not to update the atom coordintes,
 			//  only update the actualCoords
 			if (Math.abs(lligRotStep)>0.0001)   // this should be in
-				m.rotateStrandAroundCOM(ligStrNum,(float)ligTorque[0],(float)ligTorque[1],(float)ligTorque[2],(float)lligRotStep,false);
+				m.rotateStrandAroundCOM(ligStrNum,(double)ligTorque[0],(double)ligTorque[1],(double)ligTorque[2],(double)lligRotStep,false);
 		}
 		// Apply translation, don't update atom coordinates
 		// The last parameter says not to update the atom coordintes,
@@ -1118,8 +1118,8 @@ public class SimpleMinimizer implements Serializable {
 	// For the given dihedral, compute initial energy, save coordinates,
 	//  modify dihedral, compute new energy, compute difference in
 	//  energy, restore coords, return step size and direction of lower energy
-	protected float computeDihedDiff(int diAtArray[], int atomList[],
-		int alSize, int AANum, float stepSize, int strNumber, int dihedNumForCur){
+	protected double computeDihedDiff(int diAtArray[], int atomList[],
+		int alSize, int AANum, double stepSize, int strNumber, int dihedNumForCur){
 		
 		double initialEnergy[], secondEnergy[];
 		
@@ -1234,14 +1234,14 @@ public class SimpleMinimizer implements Serializable {
 			return;
 		}*/
 	
-		float step = initialAngleStepSize;
+		double step = initialAngleStepSize;
 		double lmaxMovement = maxMovement;
 			// maximum degrees by which a torsion can
 			//  cumulatively change
-		float strRotStep = RotStep;
+		double strRotStep = RotStep;
 			// step size for the rigid rotation
 			//  of the ligand
-		float strTransStep = TransStep;
+		double strTransStep = TransStep;
 			// step size in � for the rigid ligand
 			//  translation
 		double strMaxTrans = MaxTrans;
@@ -1302,9 +1302,9 @@ public class SimpleMinimizer implements Serializable {
 				System.exit(1);
 		}
 		
-		float deltaStep = step / numSteps;
-		float deltaRotStep = strRotStep / numSteps;
-		float deltaTransStep = strTransStep / numSteps;		
+		double deltaStep = step / numSteps;
+		double deltaRotStep = strRotStep / numSteps;
+		double deltaTransStep = strTransStep / numSteps;		
 		
 			// numFlexRes, flexResAtomList, and flexResListSize include the ligand if one exists
 			/*if(ligStrNum != -1)
@@ -1378,9 +1378,9 @@ public class SimpleMinimizer implements Serializable {
 ////////////////////////////////////////////////////////////////////////////////
 	
 	//Backup the actual ligand coordinates (assumes there is only 1 residue in the ligand strand)
-	private float [] backupStrCoord(int strNumber){
+	private double [] backupStrCoord(int strNumber){
 		int index=0;
-		float bckpStrCoords[] = new float[m.strand[strNumber].numberOfAtoms*3];
+		double bckpStrCoords[] = new double[m.strand[strNumber].numberOfAtoms*3];
 		for (int j=0; j<m.strand[strNumber].numberOfResidues;j++){
 			for (int i=0; i<m.strand[strNumber].residue[j].numberOfAtoms; i++){
 				int curStrAtom = m.strand[strNumber].residue[j].atom[i].moleculeAtomNumber;
@@ -1394,7 +1394,7 @@ public class SimpleMinimizer implements Serializable {
 	}
 	
 	//Restore the backup actual ligand coordinates (assumes there is only 1 residue in the ligand strand)
-	private void restoreStrCoord(int strNumber, float bckpStrCoords[]){			
+	private void restoreStrCoord(int strNumber, double bckpStrCoords[]){			
 		int index=0;
 		for(int j=0; j<m.strand[strNumber].numberOfResidues;j++){
 			for (int i=0; i<m.strand[strNumber].residue[j].numberOfAtoms; i++){
@@ -1407,8 +1407,8 @@ public class SimpleMinimizer implements Serializable {
 		}
 	}
 	
-	/*private float [] backupLigCoord(){		
-		float bckpLigCoords[] = new float[m.strand[ligStrNum].numberOfAtoms*3];
+	/*private double [] backupLigCoord(){		
+		double bckpLigCoords[] = new double[m.strand[ligStrNum].numberOfAtoms*3];
 		for (int i=0; i<m.strand[ligStrNum].numberOfAtoms; i++){
 			int curLigAtom = m.strand[ligStrNum].residue[0].atom[i].moleculeAtomNumber;
 			bckpLigCoords[i*3] = m.actualCoordinates[curLigAtom*3];
@@ -1419,7 +1419,7 @@ public class SimpleMinimizer implements Serializable {
 	}
 	
 	//Restore the backup actual ligand coordinates (assumes there is only 1 residue in the ligand strand)
-	private void restoreLigCoord(float bckpLigCoords[]){			
+	private void restoreLigCoord(double bckpLigCoords[]){			
 		for (int i=0; i<m.strand[ligStrNum].numberOfAtoms; i++){
 			int curLigAtom = m.strand[ligStrNum].residue[0].atom[i].moleculeAtomNumber;
 			m.actualCoordinates[curLigAtom*3] = bckpLigCoords[i*3];

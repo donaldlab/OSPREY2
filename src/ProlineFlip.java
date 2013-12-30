@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	ProlineFlip.java
@@ -68,31 +68,50 @@ public class ProlineFlip extends Perturbation {
     static boolean UP = true;
     static boolean DOWN = false;//Pucker options
 
+    
+    boolean startingPucker;//pucker w/o perturbation
+    //we'll go to this pucker for the 0 parameter value and to the opposite for 1
+    //we'll record the startingPucker when we're about to apply the perturbation for the first time
+    boolean startingPuckerSet = false;//When recording it we'll set this flag to true
 
     public ProlineFlip(Molecule molec,int resList[]){
 
         type="PROLINE FLIP";
         m=molec;
-        resAffected=resList;
+        resDirectlyAffected=resList;
     }
 
 
-    public boolean doPerturbationMotion(float param){
+    public boolean doPerturbationMotion(double param){
 
-        Residue res = m.residue[resAffected[0]];
+        Residue res = m.residue[resDirectlyAffected[0]];
 
-        if( ( param == 1 ) && (res.name.equalsIgnoreCase("PRO")) ){//Do the flip
+        if( (res.name.equalsIgnoreCase("PRO")) ){//Apply the desired pucker
+
+            if(!startingPuckerSet){
+                startingPucker = res.pucker;
+                startingPuckerSet = true;
+            }
+            
+            res.pucker = !startingPucker;//Change the pucker
+            return m.idealizeProRing(res);//Idealize the ring with the new pucker
+        }
+        
+        
+        //The following doesn't set the pucker back to the wild type when needed, and flips back and forth
+        //if we repeatedly set the pucker to 1!
+        /*if( ( param == 1 ) && (res.name.equalsIgnoreCase("PRO")) ){//Do the flip
 
             res.pucker = !(res.pucker);//Change the pucker
             return m.idealizeProRing(res);//Idealize the ring with the new pucker
-        }
+        }*/
         
         return true;
     }
 
 
     public void setDefaultParams(){
-        float mp[] = {0f,1f};
+        double mp[] = {0f,1f};
         minParams = mp.clone();
         maxParams = mp.clone();
     }
@@ -104,11 +123,13 @@ public class ProlineFlip extends Perturbation {
         //strandRot is an array of StrandRotamers objects for the strands in m
         ArrayList<Integer> resList = new ArrayList<Integer>();
 
-        for( int resNum=0; resNum<m.residue.length; resNum++ ){
-            Residue res = m.residue[resNum];
-
-            if( strandRot[res.strandNumber].checkAllowable( res.strandResidueNumber , "PRO" ) )
-                    resList.add(resNum);
+        for(int str=0; str<m.strand.length; str++){
+            if(m.strand[str].isProtein){
+                for( int strResNum=0; strResNum<m.strand[str].residue.length; strResNum++ ){
+                    if( strandRot[str].checkAllowable( strResNum , "PRO" ) )
+                            resList.add(m.strand[str].residue[strResNum].moleculeResidueNumber);
+                }
+            }
         }
 
         ProlineFlip[] ans = new ProlineFlip[resList.size()];
@@ -121,6 +142,13 @@ public class ProlineFlip extends Perturbation {
         }
 
         return ans;
+    }
+    
+    
+    
+    @Override
+    public boolean isParamAngle(){
+        return false;
     }
 
 

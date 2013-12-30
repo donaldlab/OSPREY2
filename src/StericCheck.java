@@ -381,7 +381,7 @@ public class StericCheck {
 								for(int t=0;t<m.strand[q].residue[w].numberOfAtoms;t++) {
 									Atom a2 = m.strand[q].residue[w].atom[t];
 									if ( hSteric || (!a2.elementType.equalsIgnoreCase("H")) ) {
-										if (!psc.isAllowedSteric(m, a1, a2, (float)overlapThresh))
+										if (!psc.isAllowedSteric(m, a1, a2, (double)overlapThresh))
 											return false;
 									}
 								}
@@ -393,7 +393,7 @@ public class StericCheck {
 									Atom a2 = m.strand[q].residue[w].atom[t];
 									if (a2.getIsBBatom()){
 										if ( hSteric || (!a2.elementType.equalsIgnoreCase("H")) ) {
-											if (!psc.isAllowedSteric(m, a1, a2, (float)overlapThresh))
+											if (!psc.isAllowedSteric(m, a1, a2, (double)overlapThresh))
 												return false;
 										}
 									}

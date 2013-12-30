@@ -3,7 +3,7 @@
 ! AA_name num_dihedrals num_rotamers
 ! dihedral_list_one_per_line
 ! rotamer_angles
-1
+8
 MON 1 19
 C8 C7 C6 C13
 -180
@@ -25,3 +25,10 @@ C8 C7 C6 C13
 140
 160
 180
+MN1 0 0
+IHP 0 0
+CFA 0 0
+NLA 0 0
+IAC 0 0
+PCI 0 0
+PIC 0 0

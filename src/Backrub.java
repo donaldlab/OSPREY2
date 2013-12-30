@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	Backrub.java
@@ -63,15 +63,15 @@ public class Backrub extends Perturbation {
     //There are three matrices used: m=0 for the first peptide link, m=1 for the middle CA and sidechain, m=2 for the second peptide link
 
 
-    static float defaultMaxParams[] = {2.5f};
-    static float defaultMinParams[] = {-2.5f};
+    static double defaultMaxParams[] = {2.5f};
+    static double defaultMinParams[] = {-2.5f};
 
     
     public Backrub(Molecule molec,int resList[]){
 
         type="Backrub";
         m=molec;
-        resAffected=resList;
+        resDirectlyAffected=resList;
 
     }
 
@@ -83,11 +83,11 @@ public class Backrub extends Perturbation {
 
 
 
-    public boolean doPerturbationMotion(float param){//Apply the perturbation
+    public boolean doPerturbationMotion(double param){//Apply the perturbation
         //Use an arbitrary param (primary backrub angle in degrees)
         //Don't store rotation matrices or translations
 
-        float rm[][][]=new float[3][3][3];//Rotation matrices
+        double rm[][][]=new double[3][3][3];//Rotation matrices
 
 
         calcTransRot(param,rm);
@@ -99,29 +99,29 @@ public class Backrub extends Perturbation {
 
 
 
-    public void calcTransRot(float param, float rm[][][]){//calculate rotation matrices for a given perturbation parameter, put them in rm
+    public void calcTransRot(double param, double rm[][][]){//calculate rotation matrices for a given perturbation parameter, put them in rm
 //rm should be 3X3X3
 
         Atom[] Calphas=new Atom[3];
         for(int a=0;a<3;a++){
-            Calphas[a]=m.residue[resAffected[a]].getAtomByName("CA");
+            Calphas[a]=m.residue[resDirectlyAffected[a]].getAtomByName("CA");
         }
 
-        Atom O1 = m.residue[resAffected[0]].getAtomByName("O");
-        Atom O2 = m.residue[resAffected[1]].getAtomByName("O");
+        Atom O1 = m.residue[resDirectlyAffected[0]].getAtomByName("O");
+        Atom O2 = m.residue[resDirectlyAffected[1]].getAtomByName("O");
 
 
-        float x[][]=new float[3][3];//Calpha coordinates
+        double x[][]=new double[3][3];//Calpha coordinates
         for(int a=0;a<3;a++)
             x[a] = m.getActualCoord(Calphas[a].moleculeAtomNumber);
 
-        float O1Coord[] = m.getActualCoord(O1.moleculeAtomNumber);
-        float O2Coord[] = m.getActualCoord(O2.moleculeAtomNumber);
+        double O1Coord[] = m.getActualCoord(O1.moleculeAtomNumber);
+        double O2Coord[] = m.getActualCoord(O2.moleculeAtomNumber);
 
         RotMatrix r=new RotMatrix();//This is actually an object for performing rot. matrix-related calculations
         Backrubs b = new Backrubs();//And this is an object, created for BRDEE, that performs backrub-related calculations.
         //Used for the secondary peptide rotations)
-        float rotax[]=r.subtract(x[2],x[0]);//vector from 1st to second Calpha: primary rotation axis
+        double rotax[]=r.subtract(x[2],x[0]);//vector from 1st to second Calpha: primary rotation axis
 
         //Create the primary rotation matrix.  This can be used to rotate about either anchor CA.  
         r.getRotMatrix(rotax[0],rotax[1],rotax[2],param,rm[1]);
@@ -129,7 +129,7 @@ public class Backrub extends Perturbation {
         //Get first corrective peptide rotation matrix
         Atom anchor1 = new Atom("CA",x[0][0],x[0][1],x[0][2]);
         Atom anchor2 = new Atom("CA",x[2][0],x[2][1],x[2][2]);
-        float midCACoord[] = r.add( r.applyRotMatrix( rm[1], r.subtract( x[1], x[0] ) ), x[0] );
+        double midCACoord[] = r.add( r.applyRotMatrix( rm[1], r.subtract( x[1], x[0] ) ), x[0] );
         //Rotated middle CA coordinates
         Atom midCA = new Atom("CA",midCACoord[0],midCACoord[1],midCACoord[2]);
         Atom oldO1 = new Atom("O",O1Coord[0],O1Coord[1],O1Coord[2]);
@@ -142,8 +142,8 @@ public class Backrub extends Perturbation {
 
         //We need these atoms to put into getSmallRotAngle, which uses the Atom.coord array
         
-        float theta;
-        float M[][] = new float[3][3];
+        double theta;
+        double M[][] = new double[3][3];
 
         theta = getSmallRotAngle(newO1,midCA,anchor1,oldO1,b);
         theta *= b.thetaSmallScale;
@@ -164,60 +164,65 @@ public class Backrub extends Perturbation {
     }
 
 
-    public void applyTransRot(float rm[][][]){
+    public void applyTransRot(double rm[][][]){
 
 
         //All the rotation are about anchor-point CAs, so order is not important here like for the shear
         //The second peptide plane is rotated about the ending anchor CA; the other stuff is rotated about the starting one
-        int CA0AtNum = m.residue[resAffected[0]].getAtomNameToMolnum("CA");
-        int CA2AtNum = m.residue[resAffected[2]].getAtomNameToMolnum("CA");
+        int CA0AtNum = m.residue[resDirectlyAffected[0]].getAtomNameToMolnum("CA");
+        int CA2AtNum = m.residue[resDirectlyAffected[2]].getAtomNameToMolnum("CA");
 
 
 
         //Only rotate the amide group
-        int amide[] = m.residue[resAffected[2]].getAtomList(true,false,false,false);
+        int amide[] = m.residue[resDirectlyAffected[2]].getAtomList(true,false,false,false);
         m.rotateAtomList( amide, rm[2], m.actualCoordinates[3*CA2AtNum],
                 m.actualCoordinates[3*CA2AtNum+1], m.actualCoordinates[3*CA2AtNum+2], false);
 
 
         //Rotate the carbonyl
-        int carbonyl[] = m.residue[resAffected[1]].getAtomList(false, false, false, true);
+        int carbonyl[] = m.residue[resDirectlyAffected[1]].getAtomList(false, false, false, true);
         m.rotateAtomList( carbonyl, rm[2], m.actualCoordinates[3*CA2AtNum],
                 m.actualCoordinates[3*CA2AtNum+1], m.actualCoordinates[3*CA2AtNum+2], false);
 
         //Apply the primary rotation only to the alpha carbon and sidechain
-        int nonAmideCarbonyl[] = m.residue[resAffected[1]].getAtomList(false, true, true, false);
+        int nonAmideCarbonyl[] = m.residue[resDirectlyAffected[1]].getAtomList(false, true, true, false);
         m.rotateAtomList( nonAmideCarbonyl, rm[1], m.actualCoordinates[3*CA0AtNum],
                 m.actualCoordinates[3*CA0AtNum+1], m.actualCoordinates[3*CA0AtNum+2], false);
 
         //Rotate the amide group
-        amide = m.residue[resAffected[1]].getAtomList(true,false,false,false);
+        amide = m.residue[resDirectlyAffected[1]].getAtomList(true,false,false,false);
         m.rotateAtomList( amide, rm[0], m.actualCoordinates[3*CA0AtNum],
                 m.actualCoordinates[3*CA0AtNum+1], m.actualCoordinates[3*CA0AtNum+2], false);
 
 
         //Just rotate the carbonyl group
-        carbonyl = m.residue[resAffected[0]].getAtomList(false, false, false, true);
+        carbonyl = m.residue[resDirectlyAffected[0]].getAtomList(false, false, false, true);
         m.rotateAtomList( carbonyl, rm[0], m.actualCoordinates[3*CA0AtNum],
                 m.actualCoordinates[3*CA0AtNum+1], m.actualCoordinates[3*CA0AtNum+2], false);
 
     }
 
 
-    public float getStepSizeForMinimizer(){//Return a step size for the minimizer to use when optimizing this perturbation
+    public double getStepSizeForMinimizer(){//Return a step size for the minimizer to use when optimizing this perturbation
         //This could potentially be improved
         return 0.5f;
     }
 
 
+    public double getMeshWidth(){
+        return 0.5;
+    }
+
+
     //Get the small rotation angle that will rotate atom pp1 around the axis defined by atoms (pp2,a3), so that pp1 will be as close as possible to atom a4
     //Adapted from Backrubs to use only Atom.coord arrays (needed for the setup of the calculations here)
-    private float getSmallRotAngle(Atom pp1, Atom pp2, Atom a3, Atom a4, Backrubs b){
+    private double getSmallRotAngle(Atom pp1, Atom pp2, Atom a3, Atom a4, Backrubs b){
 
             Atom pp3 = b.projectPointLine(a3, pp2, pp1);
             Atom pp4 = b.projectPointPlane(a3, pp2, pp3, a4);
             Atom closestPoint = b.getClosestPoint(pp3,pp1,pp4);
-            return (float)closestPoint.angle(pp1, pp3);
+            return (double)closestPoint.angle(pp1, pp3);
     }
 
 
@@ -234,8 +239,8 @@ public class Backrub extends Perturbation {
             }
 
 
-            float min1 = Float.valueOf(st.nextToken());
-            float max1 = Float.valueOf(st.nextToken());
+            double min1 = Double.valueOf(st.nextToken());
+            double max1 = Double.valueOf(st.nextToken());
 
             if( min1 + max1 != 0 ){//The first (unperturbed) state must be centered at 0
                 System.err.println("First backrub state (unperturbed) must be centered at 0: using -2.5 to 2.5");
@@ -243,18 +248,24 @@ public class Backrub extends Perturbation {
                 max1 = 2.5f;
             }
 
-            defaultMinParams = new float[numStates];
-            defaultMaxParams = new float[numStates];
+            defaultMinParams = new double[numStates];
+            defaultMaxParams = new double[numStates];
 
             defaultMinParams[0] = min1;
             defaultMaxParams[0] = max1;
 
             for(int state=1; state<numStates; state++){
-                defaultMinParams[state] = Float.valueOf(st.nextToken());
-                defaultMaxParams[state] = Float.valueOf(st.nextToken());
+                defaultMinParams[state] = Double.valueOf(st.nextToken());
+                defaultMaxParams[state] = Double.valueOf(st.nextToken());
             }
 
         }
+    }
+    
+    
+    @Override
+    public boolean isParamAngle(){
+        return true;
     }
 
 }

@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	PerturbationSelector.java
@@ -65,7 +65,7 @@ public class PerturbationSelector {
 
     StrandRCs sRC[];
     Molecule m;
-    float min_rmsd;
+    double min_rmsd;
 
     String startingPertFile;
     boolean onlyStarting = false;
@@ -75,7 +75,7 @@ public class PerturbationSelector {
 
     public PerturbationSelector(int numMut, int mutRes2Strand[], int mutRes2StrandMutIndex[], 
             int strandMut[][], boolean addWTRotamers, Molecule molec,
-            StrandRotamers[] strandRot, float minrmsd, String startPF, boolean onlyStart){
+            StrandRotamers[] strandRot, double minrmsd, String startPF, boolean onlyStart){
 
         addWTRot = addWTRotamers;
 
@@ -164,7 +164,7 @@ public class PerturbationSelector {
     }
 
 
-    
+
     //Select the perturbations to be used from the set of possible perturbations
     //and load them into the molecule m, its residues, and the RC handlers
     public void selectPerturbations(){
@@ -183,7 +183,7 @@ public class PerturbationSelector {
 
         RamachandranChecker rcheck = RamachandranChecker.getInstance();
 
-        boolean proFlip[] = new boolean[numMutable];//Indicates with residues have a proline flip
+        boolean proFlip[] = new boolean[numMutable];//Indicates which residues have a proline flip
 
         for(int curPos=0; curPos<numMutable; curPos++){
 
@@ -199,15 +199,15 @@ public class PerturbationSelector {
                 Perturbation pert = m.perts[pertNum];
                 boolean affecting=false;
 
-                for( int b=0 ; b<pert.resAffected.length; b++){
-                    if( pert.resAffected[b] == res.moleculeResidueNumber )
+                for( int b=0 ; b<pert.resDirectlyAffected.length; b++){
+                    if( pert.resDirectlyAffected[b] == res.moleculeResidueNumber )
                         affecting = true;
                 }
 
                 for( int p2 : pert.successors ){
                     Perturbation pert2 = m.perts[p2];
-                    for( int b=0 ; b<pert2.resAffected.length; b++){
-                        if( pert2.resAffected[b] == res.moleculeResidueNumber )
+                    for( int b=0 ; b<pert2.resDirectlyAffected.length; b++){
+                        if( pert2.resDirectlyAffected[b] == res.moleculeResidueNumber )
                             affecting = true;
                     }
                 }
@@ -381,24 +381,24 @@ public class PerturbationSelector {
 
                                 sRC[res.strandNumber].applyPertState(m, res.strandResidueNumber, state2);
 
-                                float rmsd = 0;
+                                double rmsd = 0;
                                 String heavyAtoms[] = {"N","CA","C","O"};
 
                                 Perturbation lastPert = m.perts[res.perts[res.perts.length - 1]];
-                                for(int q=0; q<lastPert.resAffected.length; q++){
+                                for(int q=0; q<lastPert.resDirectlyAffected.length; q++){
                                     //We take the RMSD over all heavy atoms in residues affected by the last perturbation applied,
                                     //because removing the perturbation state will remove the relevant flexibility from all these residues
-                                    Residue res2 = m.residue[lastPert.resAffected[q]];
+                                    Residue res2 = m.residue[lastPert.resDirectlyAffected[q]];
                                     for(int a=0;a<4;a++){
                                         int molAtNum = res2.getAtomNameToMolnum(heavyAtoms[a]);
                                         for(int b=0;b<3;b++){
-                                            float dev = m.actualCoordinates[3*molAtNum + b] - m.backupCoordinates[3*molAtNum + b];
+                                            double dev = m.actualCoordinates[3*molAtNum + b] - m.backupCoordinates[3*molAtNum + b];
                                             rmsd += dev*dev;
                                         }
                                     }
                                 }
 
-                                rmsd = (float)Math.sqrt(rmsd/(4*lastPert.resAffected.length));
+                                rmsd = (double)Math.sqrt(rmsd/(4*lastPert.resDirectlyAffected.length));
 
                                 if(rmsd < min_rmsd){
                                     prunedPertStates[state2] = true;
@@ -650,7 +650,7 @@ public class PerturbationSelector {
          * If needed, a more stringent sorting system can
          * 1. Use trainable parameters to score amino acid-perturbation combinations according to known mutant-WT structure pairs
          * 2. Look at energies (quick contact score or actual rigid energy), and/or
-         * 3. Incorporate these into a score that is calculated for each RC (e.g. in float RCscores[][][][])
+         * 3. Incorporate these into a score that is calculated for each RC (e.g. in double RCscores[][][][])
          * RCs with the same perturbation states can be partially averaged (perturbation states can be scored
          * too) and then the top n RCs can be taken where n is specified by the user
          * The issue with energetics is it'll get rid of conformations already well pruned by DEE

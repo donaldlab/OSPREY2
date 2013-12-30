@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	PertFileHandler.java
@@ -95,8 +95,8 @@ public class PertFileHandler {
             int pertInd[] = new int[m.residue.length];
             for(int a=0;a<numPerts;a++){
                 Perturbation pert = m.perts[a];
-                for(int b=0;b<pert.resAffected.length;b++){
-                    int rn = pert.resAffected[b];
+                for(int b=0;b<pert.resDirectlyAffected.length;b++){
+                    int rn = pert.resDirectlyAffected[b];
                     m.residue[rn].perts[pertInd[rn]] = a;
                     pertInd[rn]++;
                     if(pertInd[rn]==1)
@@ -245,15 +245,15 @@ public class PertFileHandler {
                 perts[a] = Perturbation.generate(pertType, m, affectedRes, br);
                 st = new StringTokenizer(br.readLine()," ");
                 int numStates = Integer.valueOf(st.nextToken());
-                perts[a].maxParams = new float[numStates];
-                perts[a].minParams = new float[numStates];
+                perts[a].maxParams = new double[numStates];
+                perts[a].minParams = new double[numStates];
 
                 for(int b=0;b<numStates;b++){
                     st = new StringTokenizer(br.readLine()," ");
                     if(st.countTokens() != 2)
                         throw new java.lang.Exception("Bad formatting of perturbation "+a);
-                    perts[a].minParams[b] = Float.valueOf(st.nextToken());
-                    perts[a].maxParams[b] = Float.valueOf(st.nextToken());
+                    perts[a].minParams[b] = Double.valueOf(st.nextToken());
+                    perts[a].maxParams[b] = Double.valueOf(st.nextToken());
                 }
             }
 
@@ -373,8 +373,8 @@ public class PertFileHandler {
                 }
                 bw.newLine();
 
-                for(int rc=0;rc<pert.resAffected.length;rc++){
-                    int molResNum=pert.resAffected[rc];
+                for(int rc=0;rc<pert.resDirectlyAffected.length;rc++){
+                    int molResNum=pert.resDirectlyAffected[rc];
                     bw.append(m.residue[molResNum].getResNumber()+" ");
                 }
 

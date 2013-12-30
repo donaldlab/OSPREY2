@@ -1,3 +1,8 @@
+
+import cern.colt.matrix.DoubleMatrix1D;
+import java.util.ArrayList;
+import java.util.HashMap;
+
 /*
 	This file is part of OSPREY.
 
@@ -51,7 +56,8 @@
 //	---------   -----------------    ------------------------    ----------------------------
 //	  ISG		 Ivelin Georgiev	  Duke University			  ivelin.georgiev@duke.edu
 //	  KER        Kyle E. Roberts       Duke University         ker17@duke.edu
-//    PGC        Pablo Gainza C.       Duke University         pablo.gainza@duke.edu
+//        PGC        Pablo Gainza C.       Duke University         pablo.gainza@duke.edu
+//	  MAH        Mark A. Hallen	   Duke University         mah43@duke.edu
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -100,6 +106,7 @@ public class MSAStar {
 	private ExpansionQueue curExpansion;
 	
 	int numExpanded = 0;
+        int numFS = 0;
 	
 	int topL = 0;
 	int numTopL = 0;
@@ -113,6 +120,13 @@ public class MSAStar {
         //Use DEEPer
         boolean doPerturbations;
 
+        EPICSettings es;
+        
+        //if using EPIC we'll need these:
+        CETMatrix CETM = null;//the series
+        DegreeOfFreedom DOFList[] = null;//the degrees of freedom for the system
+
+
 	//constructor
 	/*
 	 * We assume that the parameters supplied (energy and DEE information) have already been modified
@@ -120,20 +134,22 @@ public class MSAStar {
 	 * 		reduced size
 	 */
 	MSAStar (int treeLevels, int numRotForRes[], ReducedEnergyMatrix arpMatrixRed, StericCheck stF, boolean[][] spFlags,
-                boolean[][][] tripFlags, boolean doPerts){
+                boolean[][][] tripFlags, boolean doPerts, EPICSettings eset){
 	
+                es = eset;
+                
 		numTreeLevels = treeLevels;
                 pairwiseMinEnergyMatrix = arpMatrixRed;
 
 		
 		numNodesForLevel = new int [numTreeLevels];
 		nodeIndexOffset = new int [numTreeLevels];
-		pairwiseMinEnergyMatrix.numTotalNodes = 0;
-		
+		int offset = 0;
+
 		for (int i=0; i<numTreeLevels; i++){
-			nodeIndexOffset[i] = pairwiseMinEnergyMatrix.numTotalNodes;
+			nodeIndexOffset[i] = offset;
 			numNodesForLevel[i] = numRotForRes[i];
-			pairwiseMinEnergyMatrix.numTotalNodes += numNodesForLevel[i];
+			offset += numNodesForLevel[i];
 		}
 
 		
@@ -172,11 +188,11 @@ public class MSAStar {
 	public int[] doAStar (boolean run1, int numMaxChanges, int nodesDefault[], boolean prunedNodes[],
 			StrandRotamers strandRot[], String strandDefault[][], int numForRes[], int strandMut[][], boolean singleSeq, 
 			int mutRes2Strand[], int mutRes2MutIndex[]){
-		
+
 		int curLevelNum = 0;
-		float hScore;
-		float gScore;
-		float fScore;
+		double hScore;
+		double gScore;
+		double fScore;
 		QueueNode expNode = null;
 		QueueNode newNode = null;
 		
@@ -186,28 +202,28 @@ public class MSAStar {
 
 		if (run1) {//if this is the first run of A*, then we need to set-up the empty expansion queue
 			
-			//initially, we are at level zero; all nodes at that level are visible;
-			//	compute their f(n) score and add to the expansion queue
-			for (int curNode=0; curNode<numNodesForLevel[0]; curNode++){
-				
-				//if ((stericF==null)||(stericF.checkAllowedSteric(0,curConf,curNode))){//do not do a steric check if backbone minimization
+                            //initially, we are at level zero; all nodes at that level are visible;
+                            //	compute their f(n) score and add to the expansion queue
+                            for (int curNode=0; curNode<numNodesForLevel[0]; curNode++){
 
-					curConf[0] = curNode;//this is the only node in the current conformation
-					
-					//compute f for the current node
-					gScore = gCompute (curLevelNum, curConf);
-					hScore = hCompute (curLevelNum, curConf);
-					fScore = gScore + hScore;
-					
-					//create a queueNode with the corresponding information
-					newNode = new QueueNode (curNode, 0, curConf, fScore);
-					
-					//insert in the expansion list
-					curExpansion.insert(newNode);
-				//}
-			}
-			if (curConf[0]==-1) //no sterically allowed nodes at the first residue, so no possible conformations				
-				return curConf;				
+                                    //if ((stericF==null)||(stericF.checkAllowedSteric(0,curConf,curNode))){//do not do a steric check if backbone minimization
+
+                                            curConf[0] = curNode;//this is the only node in the current conformation
+
+                                            //compute f for the current node
+                                            gScore = gCompute (curLevelNum, curConf);
+                                            hScore = hCompute (curLevelNum, curConf);
+                                            fScore = gScore + hScore;
+
+                                            //create a queueNode with the corresponding information
+                                            newNode = new QueueNode (curNode, 0, curConf, fScore);
+
+                                            //insert in the expansion list
+                                            curExpansion.insert(newNode);
+                                    //}
+                            }
+                            if (curConf[0]==-1) //no sterically allowed nodes at the first residue, so no possible conformations				
+                                    return curConf;	
 		}
 
 		boolean done = false;		
@@ -232,84 +248,103 @@ public class MSAStar {
 			if (expNode==null){//the queue is empty
 				return curConf; //so return a sequence of -1's to flag the stop of the search
 			}
-			
-			else { //the queue is not empty
+
+                        if(es.useEPIC){
+                            //We will only expand terms that have the FS term included
+                            //until our lowest lower bound contains an FS term, we will
+                            //compute this term for the lowest-bounded nodes we get
+                            //and then throw them back in the queue (this is to minimize the number of
+                            //times we have to compute the FS term)
+                            while(!expNode.FSTermIncluded){
+                                curExpansion.delete(expNode);
+                                expNode.fScore += FSTerm(expNode);
+                                expNode.FSTermIncluded = true;
+                                curExpansion.insert(expNode);
+                                expNode = curExpansion.curFront;
+                            }
+                            //Now expNode has an FS term so we can expand it
+                        }
 				
-				printState(expNode);
-				
-				for (int i=0; i<=expNode.level; i++){//get the corresponding conformation leading to this node
-					curConf[i] = expNode.confSoFar[i];
-				}
-				curLevelNum = expNode.level;//get the corresponding level
-				
-				//if the current min node is at the last level, we have found a full conformation
-				if (curLevelNum==numTreeLevels-1){
-					curExpansion.delete(expNode);//delete this node to set-up for the next min conformation (next run of A*)
-					done = true;
-				}
-				else {//we are not at the last level, so we can expand the current node to the next level
-					
-					curLevelNum++;	//since the new nodes are at the next level, increment the current level number
-					
-					
-					int numChanges = 0;
-					int curPruningInd = 0;
-					if (!singleSeq) { //multiple sequences
-						//Check the number of differences from the default node sequence: should not exceed numMaxChanges
-						for (int i=0; i<curLevelNum; i++){ //first, get the actual conf for the assigned curConf
-							int curNodeInd = 0;
-							int actualNode = -1;
-							for (int curRot=0; curRot<numForRes[i]; curRot++){
-								if (!prunedNodes[curPruningInd]){								
-									if (curNodeInd==curConf[i])
-										actualNode = curRot;
-									curNodeInd++;
-								}
-								curPruningInd++;
-							}
-							int index = getAAIndex(actualNode,i,strandDefault,strandRot,strandMut,mutRes2Strand,mutRes2MutIndex);
-							if (index!=nodesDefault[i])
-								numChanges++;
-						}
-					}
-					
-					for (int curNode=0;curNode<numNodesForLevel[curLevelNum];curNode++){
-						
-						int numChanges2 = numChanges;
-						if (!singleSeq) //multiple sequences, so compute the difference from WT
-							numChanges2 = getNewNumChanges(curPruningInd,curLevelNum,numForRes,prunedNodes,curNode,strandDefault,strandRot,strandMut,nodesDefault,numChanges,mutRes2Strand, mutRes2MutIndex);
-						
-						
-						if ((singleSeq)||(numChanges2<=numMaxChanges)){ //continue only if (singleSeq) or (num differences does not exceed the max one)
-							
-							//if ((stericF==null)||(stericF.checkAllowedSteric(curLevelNum,curConf,curNode))){//do not do a steric check if backbone minimization
-                                                        if( ! isPruned(nodeIndexOffset[curLevelNum] + curNode, curConf, curLevelNum-1) ){//Don't make this new node if its conformation contains pruned pairs or triples
+                        printState(expNode);
+                        
+                            for (int i=0; i<=expNode.level; i++){//get the corresponding conformation leading to this node
+                                    curConf[i] = expNode.confSoFar[i];
+                            }
+                            curLevelNum = expNode.level;//get the corresponding level
+
+                            //if the current min node is at the last level, we have found a full conformation
+                            if (curLevelNum==numTreeLevels-1){
+                                    done = true;
+                            }
+                            else {//we are not at the last level, so we can expand the current node to the next level
+
+                                    curLevelNum++;	//since the new nodes are at the next level, increment the current level number
 
 
-								curConf[curLevelNum] = curNode;//add curNode to the conformation so far
-								
-								//compute f for the current node
-								gScore = gCompute (curLevelNum, curConf);
-								hScore = hCompute (curLevelNum, curConf);
-								fScore = gScore + hScore;
-								
-								//create a queueNode with the corresponding information
-								newNode = new QueueNode (curNode, curLevelNum, curConf, fScore);
-								
-								//insert in the expansion list
-								curExpansion.insert(newNode);
-                                                        }
-							//}
-						}
-					}
+                                    int numChanges = 0;
+                                    int curPruningInd = 0;
+                                    if (!singleSeq) { //multiple sequences
+                                            //Check the number of differences from the default node sequence: should not exceed numMaxChanges
+                                            for (int i=0; i<curLevelNum; i++){ //first, get the actual conf for the assigned curConf
+                                                    int curNodeInd = 0;
+                                                    int actualNode = -1;
+                                                    for (int curRot=0; curRot<numForRes[i]; curRot++){
+                                                            if (!prunedNodes[curPruningInd]){
+                                                                    if (curNodeInd==curConf[i])
+                                                                            actualNode = curRot;
+                                                                    curNodeInd++;
+                                                            }
+                                                            curPruningInd++;
+                                                    }
+                                                    int index = getAAIndex(actualNode,i,strandDefault,strandRot,strandMut,mutRes2Strand,mutRes2MutIndex);
+                                                    if (index!=nodesDefault[i])
+                                                            numChanges++;
+                                            }
+                                    }
 
-					//delete the expanded node from the queue, since it has already contributed
-					curExpansion.delete(expNode);
-				}	
-			}
+                                    for (int curNode=0;curNode<numNodesForLevel[curLevelNum];curNode++){
+
+                                            int numChanges2 = numChanges;
+                                            if (!singleSeq) //multiple sequences, so compute the difference from WT
+                                                    numChanges2 = getNewNumChanges(curPruningInd,curLevelNum,numForRes,prunedNodes,curNode,strandDefault,strandRot,strandMut,nodesDefault,numChanges,mutRes2Strand, mutRes2MutIndex);
+
+
+                                            if ((singleSeq)||(numChanges2<=numMaxChanges)){ //continue only if (singleSeq) or (num differences does not exceed the max one)
+
+                                                    //if ((stericF==null)||(stericF.checkAllowedSteric(curLevelNum,curConf,curNode))){//do not do a steric check if backbone minimization
+                                                    if( ! isPruned(nodeIndexOffset[curLevelNum] + curNode, curConf, curLevelNum-1) ){//Don't make this new node if its conformation contains pruned pairs or triples
+
+
+                                                            curConf[curLevelNum] = curNode;//add curNode to the conformation so far
+
+                                                            //compute f for the current node
+                                                            gScore = gCompute (curLevelNum, curConf);
+                                                            hScore = hCompute (curLevelNum, curConf);
+                                                            fScore = gScore + hScore;
+
+                                                            //create a queueNode with the corresponding information
+                                                            newNode = new QueueNode (curNode, curLevelNum, curConf, fScore);
+
+                                                            if(es.useEPIC && expNode.optFSPoint!=null)//inherit optimal DOF values from parent, to use as initial values if we need to minimize
+                                                                newNode.optFSPoint = expNode.optFSPoint.copy();
+
+                                                            //insert in the expansion list
+                                                            curExpansion.insert(newNode);
+                                                    }
+                                                    //}
+                                            }
+                                    }
+                            }
+                            
+
+                        //delete the expanded node from the queue, since it has already contributed
+                        curExpansion.delete(expNode);
+			//}
 		}
+
+                System.out.println("A* returning conformation; lower bound = "+expNode.fScore+" nodes expanded: "+numExpanded+" FS terms evaluated: "+numFS);
 		
-		return curConf;
+                return curConf;
 	}
 	
 	private int getAAIndex(int rotIndex, int curRes, String strandDefault[][], StrandRotamers strandRot[], int strandMut[][], int mutRes2Strand[], int mutRes2MutIndex[]){
@@ -384,9 +419,9 @@ public class MSAStar {
 	
 	//Compute the h(n) score for the new node expanded by expNode
 	//		called by doAStar(.)
-	private float hCompute (int dLevel, int conf[]){
+	private double hCompute (int dLevel, int conf[]){
 		
-		float hn = 0.0f;
+		double hn = 0.0f;
 
 		for (int curLevel=dLevel+1;curLevel<numTreeLevels;curLevel++){
 			hn += EnergyAtLevel(dLevel, curLevel, conf);
@@ -396,15 +431,15 @@ public class MSAStar {
 	}
 	
 	//Called by hCompute(.)
-	private float EnergyAtLevel(int topLevel, int curLevel, int conf[]){
+	private double EnergyAtLevel(int topLevel, int curLevel, int conf[]){
 		
-		float minE = (float)Math.pow(10,30);
-		float curE;		
+		double minE = (double)Math.pow(10,30);
+		double curE;		
 		int index1;
 		
-		float minShellIntraE;			//formula term 1
-		float sumMinPairE;			//formula term 2
-		float sumMinMinPairE;		//formula term 3
+		double minShellIntraE;			//formula term 1
+		double sumMinPairE;			//formula term 2
+		double sumMinMinPairE;		//formula term 3
 		
 		for (int i1=0; i1<numNodesForLevel[curLevel];i1++){		//the rotamers at j
 
@@ -427,9 +462,9 @@ public class MSAStar {
 	}
 	
 	//Called by EnergyAtLevel(.)
-	private float hSumMinPVE (int topLevel, int index1, int conf[]){
+	private double hSumMinPVE (int topLevel, int index1, int conf[]){
 		
-		float sum = 0.0f;
+		double sum = 0.0f;
 		int index2;
 		
 		for (int level=0; level<=topLevel; level++){
@@ -443,9 +478,9 @@ public class MSAStar {
 	}
 	
 	//Called by EnergyAtLevel(.)
-	private float sumMinMinPVE(int jLevel, int firstIndex, int conf[], int topLevel){
+	private double sumMinMinPVE(int jLevel, int firstIndex, int conf[], int topLevel){
 		
-		float sum = 0.0f;
+		double sum = 0.0f;
 		for (int level=jLevel+1; level<numTreeLevels; level++){
 			sum += indMinMinPVE(level, firstIndex, conf, topLevel);
 		}
@@ -454,10 +489,10 @@ public class MSAStar {
 	}
 	
 	//Called by sumMinMinPVE(.)
-	private float indMinMinPVE (int kLevel, int firstIndex, int conf[], int topLevel){
+	private double indMinMinPVE (int kLevel, int firstIndex, int conf[], int topLevel){
 		
-		float minEn = (float)Math.pow(10,30);
-		float curEn;
+		double minEn = (double)Math.pow(10,30);
+		double curEn;
 		int secondIndex;
 		
 		for (int i2=0; i2<numNodesForLevel[kLevel]; i2++){ //u at k
@@ -480,13 +515,13 @@ public class MSAStar {
 	
 	//Compute the g(n) score for the new node expanded by expNode;
 	//		called by doAStar(.)
-	private float gCompute (int dLevel,int conf[]){
+	private double gCompute (int dLevel,int conf[]){
 		
-		float gn = 0.0f;
+		double gn = 0.0f;
 		int index1;
 		
-		float minShellIntraE;		//formula term 1
-		float sumMinPairE;		//formula term 2
+		double minShellIntraE;		//formula term 1
+		double sumMinPairE;		//formula term 2
 		
 		for (int curLevel=0; curLevel<=dLevel; curLevel++){//copute using the formula
 			
@@ -498,15 +533,109 @@ public class MSAStar {
 			
 			gn += (minShellIntraE + sumMinPairE);
 		}
-		
+
 		return gn;
 	}
+
+
+        private double FSTerm(QueueNode expNode){
+            //Get contribution to g-score from fit series
+            //include h-score too if useHSer
+            //optDOFVals is initially from the parent, to use an initial values; update to be optimal here
+
+
+            //if only want FS terms for full confs
+            //if(dLevel<numTreeLevels-1)
+            //    return 0;
+
+            CETObjFunction of = getNodeObjFunc(expNode);
+            
+            
+            CCDMinimizer ccdMin = new CCDMinimizer(of,false);
+            
+            //TEMPORARILY DE-ACTIVATING OPTFSPOINT
+            /*if(expNode.optFSPoint!=null && useHSer ){//we have initial values to use...
+                //OUTFIT FOR CHANGING NUMBERS OF DOFS IN !USEHSER THOUGH...
+                
+                //if we're not getting much improvement by updating the FSTerm
+                //even with the old initial values,
+                //then the minimized value will not offer significant improvement over the current score
+                //so don't spend time on it
+                //dof_inh_lazy
+                double initE = of.getValue( expNode.optFSPoint );
+                if(useHSer && initE < expNode.fScore+0.1)
+                    return expNode.fScore;
+                
+                
+                ccdMin.singleInitVal = expNode.optFSPoint;
+            }*/
+                
+
+            DoubleMatrix1D optDOFs = ccdMin.minimize();
+            if(optDOFs==null)//for ellipse bounds, if the highest ellipses don't all intersect together,
+                //we can exclude the conformations involving them (set bound to inf)
+                return Double.POSITIVE_INFINITY;
+            
+            double LSBE = of.getValue( optDOFs );
+            
+            //store initial values for next time
+            //TEMPORARILY DE-ACTIVATING OPTFSPOINT
+            /*if(useHSer){
+                if(expNode.optFSPoint==null)
+                    expNode.optFSPoint = optDOFs;
+                else
+                    expNode.optFSPoint.assign(optDOFs);
+            }*/
+            
+            /*if(LSBE<-0.001){
+                System.err.println("NEGATIVE VALUE ENCOUNTERED FOR LSBE: "+LSBE);
+                System.err.println("Outputting LSBObjFunction to LSBOF.dat");
+                KSParser.outputObject(of, "LSBOF.dat");
+                System.err.println("optDOFs: "+optDOFs);
+                System.exit(0);
+            }*/
+            
+            numFS++;
+            
+            return LSBE;
+        }
+
+        
+        
+        CETObjFunction getNodeObjFunc(QueueNode expNode) {
+            //not for splitBySlack
+            
+            int dLevel = expNode.level;
+            int[] conf = expNode.confSoFar;
+            
+            int AANums[] = new int[dLevel+1];
+            int rots[] = new int[dLevel+1];
+            for(int level=0; level<=dLevel; level++){
+
+                if(conf[level]>=0){
+                    int redRot = pairwiseMinEnergyMatrix.resOffsets[level]+conf[level];
+                    //long-form reduced index for rotamer at this level
+
+                    AANums[level] = pairwiseMinEnergyMatrix.indicesEMatrixAA[redRot];
+                    rots[level] = pairwiseMinEnergyMatrix.indicesEMatrixRot[redRot];
+                }
+                else{//special for not-fully-assigned levels
+                    AANums[level] = -1;
+                    rots[level] = conf[level];
+                }
+            
+            }
+            
+            return CETM.getObjFunc(AANums,rots,false,false);//This can include h bounds if they're set up
+        }
+        
+
 	
 	//Called by gCompute(.)
-	private float gSumMinPVE(int topLevel, int startLevel, int index1, int conf[]){
+	private double gSumMinPVE(int topLevel, int startLevel, int index1, int conf[]){
 		
 		int index2;
-		float sum = 0.0f;
+		double sum = 0.0f;
 		
 		for (int level=startLevel; level<=topLevel; level++){
 			
@@ -590,4 +719,11 @@ public class MSAStar {
 
             return false;
         }
+
+        public int getNumNodes(){
+            return curExpansion.getNumNodes();
+        }
+         
+        
+        
 }

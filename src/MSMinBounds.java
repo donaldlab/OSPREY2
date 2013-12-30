@@ -126,7 +126,7 @@ public class MSMinBounds extends DEE {
 	//constructor
 	MSMinBounds(PairwiseEnergyMatrix arpMatrix, int numResMutable,
 			int strMut[][], StrandRotamers strRot[], double pruneE, 
-			PrunedRotamers<Boolean> prunedRotAtRes, boolean spFlags[][][][][][], boolean useSF, float initEw, boolean boundKS, 
+			PrunedRotamers<Boolean> prunedRotAtRes, boolean spFlags[][][][][][], boolean useSF, double initEw, boolean boundKS, 
 			boolean onlyCompBound,int mutRes2StrandP[], int mutRes2MutIndexP[], boolean doPerts) {
 
             init(arpMatrix, null, numResMutable,

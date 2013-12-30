@@ -80,7 +80,7 @@ public class RotamerLibrary implements Serializable {
 	
 	private String dihedralAtomNames[][][];  // Names of atoms involved in the dihedrals for each amino acid
 	private int rotamerValues[][][];  // Actual angle values for each rotamer for each amino acid
-	private float rotamerVolumes[][];	// Volumes of each rotamer for each amino acid
+	private double rotamerVolumes[][];	// Volumes of each rotamer for each amino acid
 	
 	private int totalNumRotamers; //AAs with 0 rotamers are counted as 1 rotamer	
 	private int rotamerIndexOffset[] = null; //the rotamer index offset for each amino acid (AAs with 0 rotamers are counted as 1 rotamer)
@@ -222,7 +222,7 @@ public class RotamerLibrary implements Serializable {
 		BufferedReader bufread = new BufferedReader(new InputStreamReader(is));
 		String curLine = null;
 		
-		rotamerVolumes = new float[numAAallowed][];
+		rotamerVolumes = new double[numAAallowed][];
 		
 		is = new FileInputStream( volFilename );
 		bufread = new BufferedReader(new InputStreamReader(is));
@@ -241,9 +241,9 @@ public class RotamerLibrary implements Serializable {
 			if (numRotamers[aaIndex]==0)
 				numRotVol++;
 			
-			rotamerVolumes[aaIndex] = new float[numRotVol];
+			rotamerVolumes[aaIndex] = new double[numRotVol];
 			for (int j=0; j<numRotVol; j++)
-				rotamerVolumes[aaIndex][j] = new Float(getToken(curLine,j+2)).floatValue();
+				rotamerVolumes[aaIndex][j] = new Double(getToken(curLine,j+2)).doubleValue();
 		
 			curLine = bufread.readLine();
 			curResult++;
@@ -285,13 +285,13 @@ public class RotamerLibrary implements Serializable {
 			printStream.print(aanames[i] + " ");
 			System.out.println(aanames[i] + " ");
 			if(getNumRotamers(aanames[i])==0){		// ALA or GLY
-				float vol = sm.getMoleculeVolume(0.25f,0.0f);
+				double vol = sm.getMoleculeVolume(0.25f,0.0f);
 				printStream.print(vol + " ");
 				System.out.println(vol + " ");
 			}			
 			for(int j=0;j<getNumRotamers(aanames[i]);j++){
 				LR.applyRotamer(m,0,j);
-				float vol = sm.getMoleculeVolume(0.25f,0.0f);
+				double vol = sm.getMoleculeVolume(0.25f,0.0f);
 				printStream.print(vol + " ");
 				System.out.println(vol + " ");
 			}
@@ -401,7 +401,7 @@ public class RotamerLibrary implements Serializable {
 		return numAAallowed;
 	}
 	
-	public float [][] getRotVol(){
+	public double [][] getRotVol(){
 		return rotamerVolumes;
 	}
 	

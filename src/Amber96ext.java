@@ -49,10 +49,11 @@
 // authors:
 //    initials    name                  organization                email
 //   ---------   --------------      ------------------------     ------------------------------
-//     RHL        Ryan Lilien          Dartmouth College           ryan.lilien@dartmouth.edu
-//     ISG		  Ivelin Georgiev	   Duke University			   ivelin.georgiev@duke.edu
+//     RHL        Ryan Lilien           Dartmouth College       ryan.lilien@dartmouth.edu
+//     ISG        Ivelin Georgiev       Duke University		ivelin.georgiev@duke.edu
 //     KER        Kyle E. Roberts       Duke University         ker17@duke.edu
 //     PGC        Pablo Gainza C.       Duke University         pablo.gainza@duke.edu
+//     MAH        Mark A. Hallen	Duke University         mah43@duke.edu
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -117,7 +118,7 @@ public class Amber96ext implements ForceField, Serializable {
 	boolean solvExcludePairs[][];
 	double D2R = 0.01745329251994329576;
 	double R2D = 57.29577951308232090712;
-	float vdwMultiplier = 1.0f;
+	double vdwMultiplier = 1.0f;
 	int ligandNum = -1;
 	
 	// The following was added by Ryan Lilien
@@ -126,36 +127,36 @@ public class Amber96ext implements ForceField, Serializable {
 	
 	final int atomTypeX = -2; //the atom type number for the X wildcard atom type
 	String[] atomTypeNames = null;
-	float[] atomAtomicMasses = null;
+	double[] atomAtomicMasses = null;
 	int[]   bondAtomType1 = null;
 	int[]   bondAtomType2 = null;
-	float[] bondHFC = null; // Harmonic Force Constant
-	float[] bondEBL = null; // Equilibrium Bond Length
+	double[] bondHFC = null; // Harmonic Force Constant
+	double[] bondEBL = null; // Equilibrium Bond Length
 	int[]		angleAtomType1 = null;
 	int[]		angleAtomType2 = null;
 	int[]		angleAtomType3 = null;
-	float[] angleHFC = null; // Harmonic Force Constant
-	float[] angleEBA = null; // Equilibrium Bond Angle
+	double[] angleHFC = null; // Harmonic Force Constant
+	double[] angleEBA = null; // Equilibrium Bond Angle
 	int numGeneralDihedParams = 0; //the number of generic dihedral parameters (that have wildcard X atoms)
 	int[]		dihedAtomType1 = null;
 	int[]		dihedAtomType2 = null;
 	int[]		dihedAtomType3 = null;
 	int[]		dihedAtomType4 = null;
 	// Dihedral: (PK/IDIVF) * (1 + cos(PN*phi - PHASE))
-	float[] dihedTerm1 = null; // (PK/IDIVF)
+	double[] dihedTerm1 = null; // (PK/IDIVF)
 	int[] dihedPN = null; // Periodicity
-	float[] dihedPhase = null; // Phase
+	double[] dihedPhase = null; // Phase
 	int[]		impDihedAtomType1 = null;
 	int[]		impDihedAtomType2 = null;
 	int[]		impDihedAtomType3 = null;
 	int[]		impDihedAtomType4 = null;
 	// Imprper Dihedral: PK * (1 + cos(PN*phi - PHASE))
-	float[] impDihedTerm1 = null; // PK
+	double[] impDihedTerm1 = null; // PK
 	int[] impDihedPN = null; // Periodicity
-	float[] impDihedPhase = null; // Phase
+	double[] impDihedPhase = null; // Phase
 	int[]		vdwAtomType1 = null;
-	float[] vdwR = null;
-	float[] vdwE = null;
+	double[] vdwR = null;
+	double[] vdwE = null;
 	int[][] equivAtoms = null;
 	// For two atoms i & j
 	//  B(ij) = 2 * (Ri + Rj)^6 * ei * ej
@@ -177,6 +178,8 @@ public class Amber96ext implements ForceField, Serializable {
 	//Used to keep track of partial subsets of solvation terms
 	int numPartSolv[] = null;
 	double partSolv[][] = null;
+        boolean isSolvTermInPart[][] = null;
+        //MH: isSolvTermInPart[a][b] states if solvationTerms[b] is listed in partSolv[a]
 	
 	//Solvation interactions for atoms more than 9.0A apart are already counted in dG(ref);
 	//		Only count solvation interactions between atoms within 9.0A distance
@@ -239,7 +242,7 @@ public class Amber96ext implements ForceField, Serializable {
 		distDepDielect = ddDielect;
 		dielectric = dielectConst;
 		
-		vdwMultiplier = (float)vdwMult;
+		vdwMultiplier = (double)vdwMult;
 		
 		doSolvationE = doSolv;
 		solvScale = solvScFactor;
@@ -267,7 +270,7 @@ public class Amber96ext implements ForceField, Serializable {
 		
 		// 1. Read atom names and atomic masses
 		atomTypeNames = new String[initSize];
-		atomAtomicMasses = new float[initSize];
+		atomAtomicMasses = new double[initSize];
 		curLine = bufread.readLine();		
 		tmpInt = 0; // temporary integer
 		// Until we're at a blank line (or until we've read numAtomTypes)
@@ -279,7 +282,7 @@ public class Amber96ext implements ForceField, Serializable {
 			}
 			
 			atomTypeNames[tmpInt] = getToken(curLine,1);  // snag atom name
-			atomAtomicMasses[tmpInt] = (new Float(getToken(curLine,2))).floatValue();
+			atomAtomicMasses[tmpInt] = (new Double(getToken(curLine,2))).doubleValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}
@@ -293,8 +296,8 @@ public class Amber96ext implements ForceField, Serializable {
 		// 2. Read Bonds
 		bondAtomType1 = new int[initSize];
 		bondAtomType2 = new int[initSize];
-		bondHFC = new float[initSize];
-		bondEBL = new float[initSize];
+		bondHFC = new double[initSize];
+		bondEBL = new double[initSize];
 		curLine = bufread.readLine();		
 		tmpInt = 0;
 		while (!(getToken(curLine,1).equals(""))) {
@@ -309,8 +312,8 @@ public class Amber96ext implements ForceField, Serializable {
 			//tmpStr = curLine.substring(0,5);
 			bondAtomType1[tmpInt] = atomTypeToInt(getDashedToken(curLine, 1));
 			bondAtomType2[tmpInt] = atomTypeToInt(getDashedToken(curLine, 2));
-			bondHFC[tmpInt] = (new Float(getDashedToken(curLine,3))).floatValue();
-			bondEBL[tmpInt] = (new Float(getDashedToken(curLine,4))).floatValue();
+			bondHFC[tmpInt] = (new Double(getDashedToken(curLine,3))).doubleValue();
+			bondEBL[tmpInt] = (new Double(getDashedToken(curLine,4))).doubleValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}
@@ -324,8 +327,8 @@ public class Amber96ext implements ForceField, Serializable {
 		angleAtomType1 = new int[initSize];
 		angleAtomType2 = new int[initSize];
 		angleAtomType3 = new int[initSize];
-		angleHFC = new float[initSize];
-		angleEBA = new float[initSize];
+		angleHFC = new double[initSize];
+		angleEBA = new double[initSize];
 		curLine = bufread.readLine();		
 		tmpInt = 0;
 		while (!(getToken(curLine,1).equals(""))) {
@@ -342,8 +345,8 @@ public class Amber96ext implements ForceField, Serializable {
 			angleAtomType1[tmpInt] = atomTypeToInt(getDashedToken(curLine,1));
 			angleAtomType2[tmpInt] = atomTypeToInt(getDashedToken(curLine,2));
 			angleAtomType3[tmpInt] = atomTypeToInt(getDashedToken(curLine,3));
-			angleHFC[tmpInt] = (new Float(getDashedToken(curLine,4))).floatValue();
-			angleEBA[tmpInt] = (new Float(getDashedToken(curLine,5))).floatValue();
+			angleHFC[tmpInt] = (new Double(getDashedToken(curLine,4))).doubleValue();
+			angleEBA[tmpInt] = (new Double(getDashedToken(curLine,5))).doubleValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}
@@ -360,12 +363,12 @@ public class Amber96ext implements ForceField, Serializable {
 		dihedAtomType2 = new int[initSize];
 		dihedAtomType3 = new int[initSize];
 		dihedAtomType4 = new int[initSize];
-		dihedTerm1 = new float[initSize];
-		dihedPhase = new float[initSize];
+		dihedTerm1 = new double[initSize];
+		dihedPhase = new double[initSize];
 		dihedPN = new int[initSize];
 		curLine = bufread.readLine();		
 		tmpInt = 0;
-		float tmpFlt = 0.0f;
+		double tmpFlt = 0.0f;
 		while (!(getToken(curLine,1).equals(""))) {
 			
 			if (tmpInt>=dihedAtomType1.length){
@@ -387,10 +390,10 @@ public class Amber96ext implements ForceField, Serializable {
 			if ( dihedAtomType1[tmpInt]==atomTypeX || dihedAtomType2[tmpInt]==atomTypeX || dihedAtomType3[tmpInt]==atomTypeX || dihedAtomType4[tmpInt]==atomTypeX ) //at least one of the atoms is a wildcard
 				numGeneralDihedParams++;
 			
-			tmpFlt = (new Float(getDashedToken(curLine,5))).floatValue();
-			dihedTerm1[tmpInt] = (new Float(getDashedToken(curLine,6))).floatValue() / tmpFlt;
-			dihedPhase[tmpInt] = (new Float(getDashedToken(curLine,7))).floatValue();
-			dihedPN[tmpInt] = (new Float(getDashedToken(curLine,8))).intValue();
+			tmpFlt = (new Double(getDashedToken(curLine,5))).doubleValue();
+			dihedTerm1[tmpInt] = (new Double(getDashedToken(curLine,6))).doubleValue() / tmpFlt;
+			dihedPhase[tmpInt] = (new Double(getDashedToken(curLine,7))).doubleValue();
+			dihedPN[tmpInt] = (new Double(getDashedToken(curLine,8))).intValue();
 			// If dihedPN is negative then there are one or more additional terms
 			//  nothing fancy needs to be done because they will all be read in anyway
 			//  but we do need to correct the sign
@@ -413,8 +416,8 @@ public class Amber96ext implements ForceField, Serializable {
 		impDihedAtomType2 = new int[initSize];
 		impDihedAtomType3 = new int[initSize];
 		impDihedAtomType4 = new int[initSize];
-		impDihedTerm1 = new float[initSize];
-		impDihedPhase = new float[initSize];
+		impDihedTerm1 = new double[initSize];
+		impDihedPhase = new double[initSize];
 		impDihedPN = new int[initSize];
 		curLine = bufread.readLine();		
 		tmpInt = 0;
@@ -435,9 +438,9 @@ public class Amber96ext implements ForceField, Serializable {
 			impDihedAtomType2[tmpInt] = atomTypeToInt(getDashedToken(curLine,2));
 			impDihedAtomType3[tmpInt] = atomTypeToInt(getDashedToken(curLine,3));
 			impDihedAtomType4[tmpInt] = atomTypeToInt(getDashedToken(curLine,4));
-			impDihedTerm1[tmpInt] = (new Float(getDashedToken(curLine,5))).floatValue();
-			impDihedPhase[tmpInt] = (new Float(getDashedToken(curLine,6))).floatValue();
-			impDihedPN[tmpInt] = (new Float(getDashedToken(curLine,7))).intValue();
+			impDihedTerm1[tmpInt] = (new Double(getDashedToken(curLine,5))).doubleValue();
+			impDihedPhase[tmpInt] = (new Double(getDashedToken(curLine,6))).doubleValue();
+			impDihedPN[tmpInt] = (new Double(getDashedToken(curLine,7))).intValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}
@@ -487,8 +490,8 @@ public class Amber96ext implements ForceField, Serializable {
 
 		// 6. Read vdw
 		vdwAtomType1 = new int[initSize];
-		vdwR = new float[initSize];
-		vdwE = new float[initSize];
+		vdwR = new double[initSize];
+		vdwE = new double[initSize];
 		curLine = bufread.readLine();
 		tmpInt = 0;
 		while (!(getToken(curLine,1).equals(""))) {
@@ -500,8 +503,8 @@ public class Amber96ext implements ForceField, Serializable {
 			}
 			
 			vdwAtomType1[tmpInt] = atomTypeToInt(getToken(curLine,1));
-			vdwR[tmpInt] = (new Float(getToken(curLine,2))).floatValue();
-			vdwE[tmpInt] = (new Float(getToken(curLine,3))).floatValue();
+			vdwR[tmpInt] = (new Double(getToken(curLine,2))).doubleValue();
+			vdwE[tmpInt] = (new Double(getToken(curLine,3))).doubleValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}
@@ -1657,7 +1660,9 @@ public class Amber96ext implements ForceField, Serializable {
 		int atomi = 0;
 		
 		numPartSolv = new int[numRows];
-		partSolv = new double[numRows][maxNumColumns*m.numberOfAtoms*7];		
+		partSolv = new double[numRows][maxNumColumns*m.numberOfAtoms*7];
+
+                isSolvTermInPart = new boolean[numRows][numSolvationTerms];
 	
 		for(int q=0;q<numRows;q++){
 			int[] tempAtomList = new int[m.numberOfAtoms];
@@ -1678,6 +1683,8 @@ public class Amber96ext implements ForceField, Serializable {
 					partSolv[q][tempIndx+5] = solvationTerms[ix6 + 5];
 					partSolv[q][tempIndx+6] = i;
 					tempCount++;
+
+                                        isSolvTermInPart[q][i] = true;
 				}
 			}
 			numPartSolv[q] = tempCount;
@@ -1692,7 +1699,7 @@ public class Amber96ext implements ForceField, Serializable {
 	//Calculates the total energy of the system specified by coordinates[];
 	//Depending on the flags, different types of energies are included/excluded
 	//If (curIndex!=-1), then precomputed partial arrays  are used to quickly compute the specified energy terms
-	public double [] calculateTotalEnergy(float coordinates[], int curIndex){
+	public double [] calculateTotalEnergy(double coordinates[], int curIndex){
 		
 		double energyTerms[] = new double[4]; //total, electrostatics, vdW, and solvation
 		for (int i=0; i<energyTerms.length; i++)
@@ -1703,10 +1710,17 @@ public class Amber96ext implements ForceField, Serializable {
 		
 		if (doSolvationE) //compute solvation energies
 			 calculateSolvationEnergy(coordinates,curIndex,energyTerms);
-		
+
 		//compute total energy (electrostatics + vdW + solvation)
 		energyTerms[0] = energyTerms[1] + energyTerms[2] + energyTerms[3];
-		
+
+               if(Double.isNaN(energyTerms[0])){
+                   for(int a=0; a<coordinates.length; a++){
+                       if(Double.isNaN(coordinates[a])||Double.isInfinite(coordinates[a]))
+                           System.out.println("NaN encountered in Amber96ext.calculateTotalEnergy!");
+                   }
+               }
+
 		return energyTerms;
 	}
 
@@ -1728,7 +1742,7 @@ public class Amber96ext implements ForceField, Serializable {
 	//   1 - compute both elect and vdw terms
 	//   2 - compute only elect term
 	//   3 - compute only vdw term
-	private void calculateEVEnergy(float coordinates[], int curIndex, double energyTerms[]){
+	private void calculateEVEnergy(double coordinates[], int curIndex, double energyTerms[]){
 
 		int atomix3, atomjx3, atomi, atomj;
 		int ix4;
@@ -1736,8 +1750,8 @@ public class Amber96ext implements ForceField, Serializable {
 		double rijx, rijy, rijz;
 		double chargei, chargej, Aij, Bij;
 		double coulombFactor;
-		float Eenergy[], Venergy[];
-		float Amult, Bmult;
+		double Eenergy[], Venergy[];
+		double Amult, Bmult;
 		
 		int numHalfNBterms = 0; int numNBterms = 0;
 		double halfNBterms[] = null; double nbTerms[] = null;
@@ -1760,8 +1774,8 @@ public class Amber96ext implements ForceField, Serializable {
 			nbEv = partNBeval[curIndex];
 		}
 		
-		Eenergy = new float[4];
-		Venergy = new float[4];
+		Eenergy = new double[4];
+		Venergy = new double[4];
 		for(int i=0;i<4;i++) {
 			Eenergy[i] = 0.0f;
 			Venergy[i] = 0.0f;
@@ -1791,7 +1805,7 @@ public class Amber96ext implements ForceField, Serializable {
 		}
 		
 		double tmpCoulFact;
-		for(int i=0; i<numHalfNBterms; i++) {
+                for(int i=0; i<numHalfNBterms; i++) {
 			ix4 += 4;
 			atomi = (int)halfNBterms[ix4];
 			atomj = (int)halfNBterms[ix4 + 1];
@@ -1928,7 +1942,7 @@ public class Amber96ext implements ForceField, Serializable {
 	}
 	
 	//Calculates the solvation energies for the system with given coordinates[]
-	private void calculateSolvationEnergy(float coordinates[], int curIndex, double energyTerms[]){
+	private void calculateSolvationEnergy(double coordinates[], int curIndex, double energyTerms[]){
 		
 		if (curIndex==-1) //all residues included
 			calculateSolvationEnergyFull(coordinates,energyTerms);
@@ -1937,7 +1951,7 @@ public class Amber96ext implements ForceField, Serializable {
 	}
 	
 	//Calculates the solvation energies for the system with given coordinates[]
-	private void calculateSolvationEnergyFull(float coordinates[], double energyTerms[]){
+	private void calculateSolvationEnergyFull(double coordinates[], double energyTerms[]){
 		
 		double energy = 0.0;
 		int atomix3, atomjx3, atomi, atomj;
@@ -2001,7 +2015,7 @@ public class Amber96ext implements ForceField, Serializable {
 	}
 	
 	//Calculates the solvation energies for the system with given coordinates[]
-	private void calculateSolvationEnergyPart(float coordinates[], int curIndex, double energyTerms[]){
+	private void calculateSolvationEnergyPart(double coordinates[], int curIndex, double energyTerms[]){
 		
 		double energy = 0.0;
 		int atomix3, atomjx3, atomi, atomj;
@@ -2036,7 +2050,16 @@ public class Amber96ext implements ForceField, Serializable {
 				atomjx3 = atomj*3;
 				
 				boolean comp = true;
-				if (m.atom[atomi].moleculeResidueNumber==m.atom[atomj].moleculeResidueNumber){
+				/*if (m.atom[atomi].moleculeResidueNumber==m.atom[atomj].moleculeResidueNumber){
+					if (j<=startInd)
+						comp = false;
+				}*/
+                                //The above assumes (in general incorrectly) that each partial array corresponds to 
+                                //all the atoms with solvation terms in a single residue.
+                                //We need to include the pair of terms (startInd,j) (numbering in solvationTerms)
+                                //either if j is not in the partial array or if j>startInd.
+                                //This will give the same behavior as calculateSolvationEnergyFull
+                                if ( isSolvTermInPart[curIndex][j] ){
 					if (j<=startInd)
 						comp = false;
 				}
@@ -2134,7 +2157,7 @@ public class Amber96ext implements ForceField, Serializable {
 		}
 
 		// Note: Bmult = vdwMultiplier^6 and Amult = vdwMultiplier^12
-		float Bmult; float Amult;
+		double Bmult; double Amult;
 		Bmult = vdwMultiplier * vdwMultiplier;
 		Bmult = Bmult*Bmult*Bmult;
 		Amult = Bmult*Bmult;
@@ -2355,9 +2378,9 @@ public class Amber96ext implements ForceField, Serializable {
 		return tmp;
 	}
 	
-	//Doubles the size of the a[] float array
-	private float [] doubleArraySize(float a[]){
-		float tmp[] = new float[a.length*2];
+	//Doubles the size of the a[] double array
+	private double [] doubleArraySize(double a[]){
+		double tmp[] = new double[a.length*2];
 		System.arraycopy(a, 0, tmp, 0, a.length);
 		return tmp;
 	}
@@ -2386,9 +2409,9 @@ public class Amber96ext implements ForceField, Serializable {
 		return tmp;
 	}
 	
-	//Reduce the a[] float array to keep only the first newSize elements
-	private float [] reduceArraySize(float a[], int newSize){
-		float tmp[] = new float[newSize];
+	//Reduce the a[] double array to keep only the first newSize elements
+	private double [] reduceArraySize(double a[], int newSize){
+		double tmp[] = new double[newSize];
 		System.arraycopy(a, 0, tmp, 0, tmp.length);
 		return tmp;
 	}

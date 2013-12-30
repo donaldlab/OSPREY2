@@ -63,7 +63,7 @@
  */
 public class ProbeStericCheck {
 	
-	final float hBondCutoff = 0.8f; //the allowed vdW overlap for H-bonding atoms (used for steric checks)
+	final double hBondCutoff = 0.8f; //the allowed vdW overlap for H-bonding atoms (used for steric checks)
 
 	//constructor
 	ProbeStericCheck (){		
@@ -72,11 +72,11 @@ public class ProbeStericCheck {
 	//Checks whether there is steric overlap (above the overlapThresh cutoff) between atoms a1 and a2 in molecule m;
 	//A special cutoff (hBondCutoff) is used if the two atoms could be forming a hydrogen bond;
 	//NOTE: the steric checks is performed using the actualCoordinates[] in the molecule, and not the atoms coord[]
-	public boolean isAllowedSteric(Molecule m, Atom a1, Atom a2, float overlapThresh){
+	public boolean isAllowedSteric(Molecule m, Atom a1, Atom a2, double overlapThresh){
 		
-		float a1coord[] = m.getActualCoord(a1.moleculeAtomNumber);
-		float a2Coord[] = m.getActualCoord(a2.moleculeAtomNumber);
-		float dist = getDist(a1coord,a2Coord);
+		double a1coord[] = m.getActualCoord(a1.moleculeAtomNumber);
+		double a2Coord[] = m.getActualCoord(a2.moleculeAtomNumber);
+		double dist = getDist(a1coord,a2Coord);
 		if ((dist < ((a2.radius + a1.radius)/100.0) - overlapThresh)){ //the two atoms overlap more than allowed
 			if (areNonBondedSteric(m,a1,a2)) { //check for overlap betwen nonbonded pairs only			
 				if (checkHbondTypes(a1,a2)){ //possible H bonding atoms, so allow bigger overlap
@@ -159,15 +159,15 @@ public class ProbeStericCheck {
 		return false;
 	}
 	
-	//Returns the distance between the two points given by coordinates coord1[] and coord2[] (float version)
-	private float getDist(float coord1[], float coord2[]){
-		float rijx, rijy, rijz, rij, rij2;
+	//Returns the distance between the two points given by coordinates coord1[] and coord2[] (double version)
+	private double getDist(double coord1[], double coord2[]){
+		double rijx, rijy, rijz, rij, rij2;
 		
 		rijx = coord1[0] - coord2[0];
 		rijy = coord1[1] - coord2[1];
 		rijz = coord1[2] - coord2[2];
 		rij2 = rijx * rijx + rijy * rijy + rijz * rijz;
-		rij = (float)Math.sqrt(rij2);
+		rij = (double)Math.sqrt(rij2);
 		
 		return rij;
 	}

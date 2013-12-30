@@ -139,7 +139,9 @@ public class StrandRotamers implements Serializable {
 				numAllowable[resNum]++;
 			}
 		}
-		
+                else
+                    System.out.println("Warning: AA type "+name+" not recognized.  Cannot set to be allowable.");
+                
 		if(debug){
 			if (aaNum>=0)
 				System.out.println("setAllow: res " + resNum + " type " + name);
@@ -200,13 +202,13 @@ public class StrandRotamers implements Serializable {
 	//  was just performed but no 'rotamer' was assigned
 	//  and curRotNum[] is -1) then the volume of the first
 	//  rotamer is used.
-	public float getCurAllowableVolume(){
+	public double getCurAllowableVolume(){
 	
-		float vol = 0.0f;
+		double vol = 0.0f;
 		int localAANum = -1;
 		String tmpstg = null;
 		
-		float rotamerVolumes[][] = rl.getRotVol();
+		double rotamerVolumes[][] = rl.getRotVol();
 		
 		for(int i=0;i<numberOfResidues;i++){
 			if(numAllowable[i] > 0){
@@ -594,12 +596,12 @@ public class StrandRotamers implements Serializable {
 			}
 		}
 
-                float newNHLength = rm.norm( rm.subtract( HNew.coord, NNew.coord ) );//New amide NH or N-CD bond length
+                double newNHLength = rm.norm( rm.subtract( HNew.coord, NNew.coord ) );//New amide NH or N-CD bond length
 
 			// START ALIGNMENT
 		// Translate N's to overlap
 		try{
-                    float Ntrans[] = new float[3];
+                    double Ntrans[] = new double[3];
                     Ntrans[0] = NNew.coord[0] - NOld.coord[0];
                     Ntrans[1] = NNew.coord[1] - NOld.coord[1];
                     Ntrans[2] = NNew.coord[2] - NOld.coord[2];
@@ -667,7 +669,7 @@ public class StrandRotamers implements Serializable {
 
                 if( newResPro || ( oldResPro && addHydrogens ) ){
 
-                    float NVec[] = rm.subtract(HOld.coord, NOld.coord);//N- to H or CD bond vector
+                    double NVec[] = rm.subtract(HOld.coord, NOld.coord);//N- to H or CD bond vector
                     NVec = rm.scale(NVec, newNHLength/rm.norm(NVec) );
                     HNew.coord = rm.add(NVec, NNew.coord);
                 }
@@ -761,7 +763,7 @@ public class StrandRotamers implements Serializable {
 		m.numberOfAtoms += changeInAtoms;
 		m.numberOfAtomsx3 = m.numberOfAtoms * 3;
 		m.atom = new Atom[m.numberOfAtoms];
-		m.actualCoordinates = new float[m.numberOfAtomsx3];
+		m.actualCoordinates = new double[m.numberOfAtomsx3];
 		for(int j=0;j<m.numberOfStrands;j++) {
 			for(int q=0;q<m.strand[j].numberOfResidues;q++) {
 				for(int w=0;w<m.strand[j].residue[q].numberOfAtoms;w++) {
@@ -1020,9 +1022,9 @@ public class StrandRotamers implements Serializable {
 		double magOld = Math.sqrt(((CBOld.coord[0] - CANew.coord[0]) * (CBOld.coord[0] - CANew.coord[0])) +
 			((CBOld.coord[1] - CANew.coord[1]) * (CBOld.coord[1] - CANew.coord[1])) +
 			((CBOld.coord[2] - CANew.coord[2]) * (CBOld.coord[2] - CANew.coord[2])));
-		r.atom[localH].coord[0] = (float)(CANew.coord[0]+(CBOld.coord[0]-CANew.coord[0])*magNew/magOld);
-		r.atom[localH].coord[1] = (float)(CANew.coord[1]+(CBOld.coord[1]-CANew.coord[1])*magNew/magOld);
-		r.atom[localH].coord[2] = (float)(CANew.coord[2]+(CBOld.coord[2]-CANew.coord[2])*magNew/magOld);
+		r.atom[localH].coord[0] = (double)(CANew.coord[0]+(CBOld.coord[0]-CANew.coord[0])*magNew/magOld);
+		r.atom[localH].coord[1] = (double)(CANew.coord[1]+(CBOld.coord[1]-CANew.coord[1])*magNew/magOld);
+		r.atom[localH].coord[2] = (double)(CANew.coord[2]+(CBOld.coord[2]-CANew.coord[2])*magNew/magOld);
 	}
 	
 	public void addOrigRots(int[][] strandMut,RotamerLibrary rl, Molecule m){

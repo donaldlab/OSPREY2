@@ -76,7 +76,7 @@ import java.io.Serializable;
  */
 public class GenericResidueTemplates implements Serializable{
 
-	public static final int MAX_NUM_RES = 50;
+	public static final int MAX_NUM_RES = 150;//50
 
 	String grFilename = "all_nuc94_and_gr.in";
 
@@ -127,7 +127,7 @@ public class GenericResidueTemplates implements Serializable{
 				tmpName = getToken(curLine,2);
 				at.changeType(tmpName);
 				at.forceFieldType = getToken(curLine,3);
-				at.charge = (float) (new Float(getToken(curLine,11)).floatValue());
+				at.charge = (double) (new Double(getToken(curLine,11)).doubleValue());
 				at.isBBatom = at.setIsBBatom();
 				at.addBond(((new Integer(getToken(curLine,5))).intValue())-dumPresent);
 				newRes.addAtom(at);  // add atom

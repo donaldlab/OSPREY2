@@ -112,8 +112,8 @@ public class KSParser
 		boolean doDihedE = false;
 		boolean doSolvationE = false;
 		double solvScale = 1.0;
-		float stericThresh = -10000.0f; // allowed overlap between the vdW radii of two atoms, steric clash if larger overlap
-		float softStericThresh = -10000.0f; // soft steric overlap threshold
+		double stericThresh = -10000.0f; // allowed overlap between the vdW radii of two atoms, steric clash if larger overlap
+		double softStericThresh = -10000.0f; // soft steric overlap threshold
 		
 		//the rotamer library files
 		//String rl; //KER: Moved rl to a static rotamer library in EnvironmentVars
@@ -149,8 +149,12 @@ public class KSParser
 	    //int ligStrNum = -1;
 	    //int cofStrNum = -1;
 	 
-	    Molecule[] mols = new Molecule[3];
-	    RotamerLibrary[][] rotLibs = new RotamerLibrary[3][];
+	    //Molecule[] mols = new Molecule[3];
+	    //RotamerLibrary[][] rotLibs = new RotamerLibrary[3][];
+            Molecule[] mols = new Molecule[5];
+	    RotamerLibrary[][] rotLibs = new RotamerLibrary[5][];
+            //make room to cache molecules and rotLibs for up to 5 configurations of strands
+            //though we may not need them all
 	
 	/** 
 	 * Checks if this is an MPI run and calls the respective functions
@@ -288,8 +292,10 @@ public class KSParser
 		
 		else if (firstToken.equalsIgnoreCase("genBackbones"))
 			generateBackbones(s);
-		 else if (firstToken.equalsIgnoreCase("identifyRots"))
+		else if (firstToken.equalsIgnoreCase("identifyRots"))
 			identifyRotamers(s);
+                else if (firstToken.equalsIgnoreCase("makeStericShell"))
+			makeStericShell(s);
                 else if (firstToken.equalsIgnoreCase("fixStruct"))
 			fixStruct(s);
                 
@@ -318,7 +324,7 @@ public class KSParser
 	public void outputProgInfo() {
 		
 		System.out.println();
-		System.out.println("OSPREY Protein Redesign Software Version 2.0");
+		System.out.println("OSPREY Protein Redesign Software Version 2.1 beta");
 		System.out.println("Copyright (C) 2001-2012 Bruce Donald Lab, Duke University");
 		System.out.println("");
 		System.out.println("This program is free software: you can redistribute it and/or modify");
@@ -364,8 +370,8 @@ public class KSParser
 		doSolvationE = (new Boolean((String)rParams.getValue("DOSOLVATIONE","true"))).booleanValue();
 		solvScale = (new Double((String)rParams.getValue("SOLVSCALE","0.5"))).doubleValue();
 		softvdwMultiplier = (new Double((String)rParams.getValue("VDWMULT","0.95"))).doubleValue();
-		stericThresh = (new Float((String)rParams.getValue("STERICTHRESH","0.4"))).floatValue();
-		softStericThresh = (new Float((String)rParams.getValue("SOFTSTERICTHRESH","1.5"))).floatValue();
+		stericThresh = (new Double((String)rParams.getValue("STERICTHRESH","0.4"))).doubleValue();
+		softStericThresh = (new Double((String)rParams.getValue("SOFTSTERICTHRESH","1.5"))).doubleValue();
 		EnvironmentVars.setDataDir(rParams.getValue("DATADIR","./"));
 		EnvironmentVars.setForcefld(rParams.getValue("FORCEFIELD","AMBER"));
 		double entropyScale = (new Double((String)rParams.getValue("ENTROPYSCALE","0.0"))).doubleValue();
@@ -442,7 +448,7 @@ public class KSParser
 		return (factorial(n-1).multiply(BigInteger.valueOf(n)));
 	}
 
-	public void saveMolecule(Molecule m, String fname, float energy){
+	public void saveMolecule(Molecule m, String fname, double energy){
 	
 		try{
 			FileOutputStream fileOutputStream = new FileOutputStream(fname);
@@ -658,8 +664,8 @@ public class KSParser
 		boolean repeatSearch = (new Boolean((String)sParams.getValue("REPEATSEARCH"))).booleanValue();
 		String backrubFile = (String)sParams.getValue("BACKRUBFILE");
 		boolean scaleInt = (new Boolean((String)sParams.getValue("SCALEINT"))).booleanValue();
-		float maxIntScale = (new Float((String)sParams.getValue("MAXINTSCALE"))).floatValue();
-		float initEw = (new Float((String)sParams.getValue("INITEW"))).floatValue();
+		double maxIntScale = (new Double((String)sParams.getValue("MAXINTSCALE"))).doubleValue();
+		double initEw = (new Double((String)sParams.getValue("INITEW"))).doubleValue();
 		double pruningE = (new Double((String)sParams.getValue("PRUNINGE"))).doubleValue();
 		double stericE = (new Double((String)sParams.getValue("STERICE"))).doubleValue();
 		//boolean ligPresent = (new Boolean((String)sParams.getValue("LIGPRESENT"))).booleanValue();
@@ -673,7 +679,7 @@ public class KSParser
 		String fName = (String)sParams.getValue("PDBPREFIX");
 		String resMut = (String)sParams.getValue("RESMUT");
 		//String mutNum = (String)sParams.getValue("mutNum");
-		//float epsilon = (new Float((String)sParams.getValue("EPSILON"))).floatValue();
+		//double epsilon = (new Double((String)sParams.getValue("EPSILON"))).doubleValue();
 		
 		if (!doMinimize)
 			minimizeBB = false;
@@ -825,7 +831,7 @@ public class KSParser
 						true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst, doDihedE, 
 						doSolvationE, solvScale, softvdwMultiplier, rl, grl, forcefield);
 				//rs.strandMut = strandMut;
-				float energy = rs.getPairE(flag, str1, res1, str2, res2,mp.strandMut);
+				double energy = rs.getPairE(flag, str1, res1, str2, res2,mp.strandMut);
 				System.out.println(""+pdbFiles[q]+": Energy: "+energy);
 			}
 			else{*/
@@ -881,22 +887,22 @@ public class KSParser
 		}
 		boolean repeatSearch = (new Boolean((String)sParams.getValue("REPEATSEARCH","true"))).booleanValue();
 		boolean scaleInt = (new Boolean((String)sParams.getValue("SCALEINT","false"))).booleanValue();
-		float maxIntScale =0.0f;
+		double maxIntScale =0.0f;
 		if(scaleInt){
-			maxIntScale = (new Float((String)sParams.getValue("MAXINTSCALE"))).floatValue();
+			maxIntScale = (new Double((String)sParams.getValue("MAXINTSCALE"))).doubleValue();
 		}
-		float initEw = (new Float((String)sParams.getValue("INITEW","6.0"))).floatValue();
-		float pruningE = (new Float((String)sParams.getValue("PRUNINGE","100.0"))).floatValue();
+		double initEw = (new Double((String)sParams.getValue("INITEW","6.0"))).doubleValue();
+		double pruningE = (new Double((String)sParams.getValue("PRUNINGE","100.0"))).doubleValue();
 		double stericE = (new Double((String)sParams.getValue("STERICE","100.0"))).doubleValue();
-		float targetVol = (new Float((String)sParams.getValue("TARGETVOLUME","0.0"))).floatValue();
-		float volWindow = (new Float((String)sParams.getValue("VOLUMEWINDOW","50000000"))).floatValue();
+		double targetVol = (new Double((String)sParams.getValue("TARGETVOLUME","0.0"))).doubleValue();
+		double volWindow = (new Double((String)sParams.getValue("VOLUMEWINDOW","50000000"))).doubleValue();
 		boolean resumeSearch = (new Boolean((String)sParams.getValue("RESUMESEARCH","false"))).booleanValue();
 		String resumeFilename = "";
 		if(resumeSearch){
 			resumeFilename = (String)sParams.getValue("RESUMEFILENAME");
 		}
 		double gamma = (new Double((String)sParams.getValue("GAMMA", "0"))).doubleValue();
-		float epsilon = (new Float((String)sParams.getValue("EPSILON","0.3"))).floatValue();
+		double epsilon = (new Double((String)sParams.getValue("EPSILON","0.3"))).doubleValue();
 		
 		boolean saveTopConfs = (new Boolean((String)sParams.getValue("SAVETOPCONFSASPDB","false"))).booleanValue();
 		boolean printTopConfs = (new Boolean((String)sParams.getValue("SAVETOPCONFSROTS","false"))).booleanValue();
@@ -933,7 +939,10 @@ public class KSParser
                     else//Otherwise just add them to the rotamer library
                         addOrigRots = true;
                 }
-
+                
+                
+                EPICSettings es = new EPICSettings(sParams);
+                
 
 		/*if (!mpiRun){
 			System.out.println("ERROR: Distributed computation requires MPI");
@@ -994,18 +1003,23 @@ public class KSParser
 		if(selectPerturbations)//Need to run the automatic perturbation selection
                     //This only needs to be done once though: after that the perturbations can be read from pertFile
                     selectPerturbations(mp, doPerturbations, pertFile, minimizePerts, addWTRot, sParams);
-		
+		//We'll need to do this once for each strand!  They have different perturbations...easiest to keep separate files
+                //this is the complex here
+                
 		
 		System.out.print("Checking if precomputed energy matrix is already computed...");
 		RotamerSearch rs = new RotamerSearch(m,numberMutable, strandsPresent,hElect,hVDW,hSteric,true,true,
                         epsilon,stericThresh,softStericThresh,distDepDielect,dielectConst,doDihedE,doSolvationE,solvScale,
-                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false);
+                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false, es);
 
 
                 if(doPerturbations)
                     rs.setupRCs(addWTRot);
 		
 		for(int i=0; i<m.numberOfStrands;i++){
+                    
+                        String strandPertFile = "STR"+i+"."+pertFile;
+   
 			if ((new Boolean((String)sParams.getValue("USEUNBOUNDSTRUCT"+i, "false"))).booleanValue()){ //a different input structure is used for the unbound partition function computation
 				ParamSet ubParams = new ParamSet(); //create a new parameter set, just for the unbound-case matrix computation; sParams must not be changed here
 				ubParams.setParamsValues(sParams.getParams(), sParams.getValues(), sParams.getCurNum());
@@ -1017,7 +1031,10 @@ public class KSParser
 				ubParams.setValue("STRANDMUTNUMS", getToken(sParams.getValue("STRANDMUTNUMS"),i+1));
 				ubParams.setValue("STRANDMUT0", sParams.getValue("STRANDMUT"+i));
 				ubParams.setValue("COFMAP0", sParams.getValue("COFMAP"+i,"-1"));
+                                ubParams.setValue("UNBOUNDSTRAND", String.valueOf(i) );
 				
+                                ubParams.setValue("PERTURBATIONFILE", strandPertFile);
+                                
 				//KER: Fix the ResAllowed Flags
 				for(int q=0; q<strandMut[i].length;q++){
 					ubParams.setValue("RESALLOWED0_"+q, sParams.getValue("RESALLOWED"+i+"_"+q));
@@ -1026,11 +1043,17 @@ public class KSParser
 				System.out.print("Checking if precomputed energy matrix (unbound) is already computed...");
 				rs = new RotamerSearch(m,numberMutable, strandsPresent,hElect,hVDW,hSteric,true,true,
                                         epsilon,stericThresh,softStericThresh,distDepDielect,dielectConst,doDihedE,doSolvationE,solvScale,
-                                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false);
+                                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false, es);
 
+                                if(doPerturbations)
+                                    rs.setupRCs(addWTRot);
                                 
                                 loadUnboundPairwiseEnergyMatrices(ubParams,rs,eMatrixNameMin,true,eMatrixNameMax,i);
-				rs = null;
+				
+                                if(es.useEPIC)
+                                    loadUnboundCETMatrix(ubParams,rs,Double.POSITIVE_INFINITY,false,i);
+                                                                
+                                rs = null;
 				ubParams = null;
 				System.out.println("done");
 				//BAD CODE //setupMolSystem(m,sParams,ligPresent,ligType); //re-initialize, since some molecule-relative variables have changed (e.g., ligStrNum)
@@ -1038,23 +1061,47 @@ public class KSParser
 				m = setupMolSystem(m,sParams,strandPresent,strandLimits);
 			}
 			else{
+                                if(rs==null || selectPerturbations){//MH: this can happen if we just handled a special unbound-strand structure
+                                    rs = new RotamerSearch(m,numberMutable, strandsPresent,hElect,hVDW,hSteric,true,true,
+                                        epsilon,stericThresh,softStericThresh,distDepDielect,dielectConst,doDihedE,doSolvationE,solvScale,
+                                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false, es);
+
+                                    if(doPerturbations)
+                                        rs.setupRCs(addWTRot);
+                                }
+                            
+                                sParams.setValue("PERTURBATIONFILE", strandPertFile);
+                                
 				rs.resetMatrices();
 				loadPairwiseEnergyMatrices(sParams,rs,eMatrixNameMin,doMinimize,eMatrixNameMax,i);
+                                
+                                
+                                if(es.useEPIC)
+                                    loadCETMatrix(sParams,rs,i,Double.POSITIVE_INFINITY,false);
 			}
 		}
 
 		rs = null;
 		System.out.println("done");
 		
+                m = new Molecule();
+                
+                //revert this for the complex
+                sParams.setValue("PERTURBATIONFILE", pertFile);
+                
 		m = setupMolSystem(m,sParams,strandPresent,strandLimits);
 		rs = new RotamerSearch(m,numberMutable, strandsPresent,hElect,hVDW,hSteric,true,true,
                         epsilon,stericThresh,softStericThresh,distDepDielect,dielectConst,doDihedE,doSolvationE,solvScale,
-                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false);
+                        softvdwMultiplier,grl, doPerturbations, pertFile, minimizePerts, false, false, es);
 		//Compute the matrices for all strands (-1 is for the complex)
 		//KER: Put this last so the correct Eref matrix is kept
 		rs.resetMatrices();
 		loadPairwiseEnergyMatrices(sParams,rs,eMatrixNameMin,doMinimize,eMatrixNameMax,COMPLEX);
 		
+                
+                if(es.useEPIC)
+                    loadCETMatrix(sParams,rs,COMPLEX,Double.POSITIVE_INFINITY,false);
+                
 		//Load mutation list for distribution
 		mutSet = handleHybridKSLoadMutList(mutFileName, numberMutable, m, numCombAll, residueMutatableAll,
 				sParams, strandMut, strandDefault, rs.strandRot, targetVol, volWindow,strandsPresent,strandPresent);
@@ -1157,7 +1204,9 @@ public class KSParser
                 mutMan.setAddWTRot(addWTRot);
                 mutMan.setIdealizeSC(Perturbation.idealizeSC);
                 mutMan.setUseFlagsAStar(false);
-				
+                
+                mutMan.setES(es);
+                
 		if (resumeSearch)
 			mutMan.setBestScore(bestScore);	// Set the current best score from the partial results
 		else
@@ -1180,18 +1229,18 @@ public class KSParser
 	 */
 	/*private BigDecimal getLigPartFn(Molecule m, int numInAS, String ligType, String eMatrixNameMin){
 		
-		float minMatrix[][][][][][] = (float [][][][][][])readObject(eMatrixNameMin);
+		double minMatrix[][][][][][] = (double [][][][][][])readObject(eMatrixNameMin);
 		
 		int numRot = grl.getNumRotamers(m.strand[ligStrNum].residue[0].name);
 		if (numRot==0) //ALA or GLY
 			numRot = 1;
 		
-		ExpFunction ef = new ExpFunction();
+		ExpFunction efunc = new ExpFunction();
 		
 		BigDecimal q_L = new BigDecimal("0.0");
 		
 		for (int i=0; i<numRot; i++)
-			q_L = q_L.add(ef.exp(-minMatrix[numInAS][grl.getAARotamerIndex(ligType)][i][numInAS][0][0]/constRT));
+			q_L = q_L.add(efunc.exp(-minMatrix[numInAS][grl.getAARotamerIndex(ligType)][i][numInAS][0][0]/constRT));
 		
 		System.out.println("Ligand partition function (double): "+q_L.doubleValue());
 		
@@ -1201,7 +1250,7 @@ public class KSParser
 	//Loads the mutation sequence list for Hybrid MinDEE-K*; computes a list if one cannot be loaded
 	private Set<OneMutation> handleHybridKSLoadMutList (String mutFileName, int numMutable,
 			Molecule m, int numComb, int residueMutatable[][], ParamSet sParams,int strandMut[][], String strandDefault[][],
-			StrandRotamers[] strandRot, float targetVol,float volWindow,int strandsPresent, boolean strandPresent[]){
+			StrandRotamers[] strandRot, double targetVol,double volWindow,int strandsPresent, boolean strandPresent[]){
 		
 		// Look for previous mutation file
 		System.out.println();
@@ -1215,7 +1264,7 @@ public class KSParser
 			RotamerSearch rs = new RotamerSearch(m, numMutable, strandsPresent, hElect, hVDW, hSteric, true,
 					true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst,doDihedE,
                                         doSolvationE,solvScale,softvdwMultiplier,grl,
-                                        false,null,false,false,false);//Not going to consider perturbations, etc. at this level of approximation
+                                        false,null,false,false,false,new EPICSettings());//Not going to consider perturbations, etc. at this level of approximation
 
 			//KER: load vol file for each rotamer library
 			for (int strNum=0; strNum<rs.strandRot.length; strNum++){
@@ -1453,7 +1502,7 @@ public class KSParser
 					OneMutation tmp = new OneMutation();
 					//mutList[resultNum] = new OneMutation();
 					tmp.score = new BigDecimal(getToken(str,1));
-					tmp.vol = new Float(getToken(str,2)).floatValue();
+					tmp.vol = new Double(getToken(str,2)).doubleValue();
 					tmp.resTypes = new String[numMutable];
 					for(int q=0;q<numMutable;q++) {
 						tmp.resTypes[q] = getToken(str,3+q);	
@@ -1611,7 +1660,7 @@ public class KSParser
 		cObj.searchNumConfsEvaluated = new int[allCombos.length];
 		cObj.searchNumConfsLeft = new int[allCombos.length];
 		cObj.searchNumPrunedMinDEE = new int[allCombos.length];
-		cObj.searchBestEnergyFound = new float[allCombos.length];
+		cObj.searchBestEnergyFound = new double[allCombos.length];
 		cObj.q = new BigDecimal[allCombos.length];
 		cObj.bestEMin = new double[allCombos.length];
 		cObj.bestE = new double[allCombos.length];
@@ -1622,7 +1671,14 @@ public class KSParser
 		for(int i=0;i<cObj.mutableSpots;i++)
 			System.out.print(" "+cObj.currentMutation[i]);
 		System.out.println(" &&");
-		
+                
+                
+                if( Boolean.valueOf(cObj.params.getValue("USECLASHFILTER","false")) ) {
+                    if(doClashFilter(cObj))//sequence pruned by clash filter
+                        return cObj;
+                }
+                
+		              
 		//KER: Run through all of the partition function calculations
 		for(int runNum = 0; runNum<allCombos.length; runNum++) {
 			long startTime = System.currentTimeMillis();
@@ -1645,6 +1701,7 @@ public class KSParser
 			ParamSet params = null;
 			String minEmatrixFile = null;
 			String maxEmatrixFile = null;
+                        String strandPertFile = null;
 			//TODO:fix this hack....
 			if ( notFullComplex && ((new Boolean((String)cObj.params.getValue("USEUNBOUNDSTRUCT"+unboundStr,"false"))).booleanValue()) ) { //use a different input PDB structure for the unbound case
 				params = new ParamSet();
@@ -1655,6 +1712,7 @@ public class KSParser
 				maxEmatrixFile = cObj.arpFilenameMax;
 				minEmatrixFile = minEmatrixFile.replace(".dat", "_"+unboundStr+".dat");
 				maxEmatrixFile = maxEmatrixFile.replace(".dat", "_"+unboundStr+".dat");
+                                strandPertFile = "STR"+unboundStr+"."+cObj.pertFile;
 				//minEmatrixFile = params.getValue("MINENERGYMATRIXNAMEUNBOUND"+unboundStr)+".dat";
 				//maxEmatrixFile = params.getValue("MAXENERGYMATRIXNAMEUNBOUND"+unboundStr)+".dat";
 			}
@@ -1665,10 +1723,12 @@ public class KSParser
 				if(notFullComplex){
 					minEmatrixFile = minEmatrixFile.replace(".dat", "_"+unboundStr+".dat");
 					maxEmatrixFile = maxEmatrixFile.replace(".dat", "_"+unboundStr+".dat");
+                                        strandPertFile = "STR"+unboundStr+"."+cObj.pertFile;
 				}
 				else{
 					minEmatrixFile = minEmatrixFile.replace(".dat", "_COM.dat");
 					maxEmatrixFile = maxEmatrixFile.replace(".dat", "_COM.dat");
+                                        strandPertFile = cObj.pertFile;
 				}
 			}
 
@@ -1716,8 +1776,13 @@ public class KSParser
 			RotamerSearch rs = new RotamerSearch(m,numberMutable,strandsPresent, hElect, hVDW, hSteric, true,
 					true, cObj.epsilon, cObj.stericThresh, cObj.softStericThresh, cObj.distDepDielect, 
                                         cObj.dielectConst,cObj.doDihedE,cObj.doSolvationE,cObj.solvScale,cObj.vdwMult,grl,
-                                        cObj.doPerturbations,cObj.pertFile, cObj.minimizePerts, false, false);
+                                        cObj.doPerturbations,strandPertFile, cObj.minimizePerts, false, false, cObj.es);
 			
+                        
+                        rs.useCCD = (new Boolean((String)cObj.params.getValue("USECCD","true"))).booleanValue();
+                        CCDMinimizer.EConvTol = (new Double((String)cObj.params.getValue("ECONVTOL","0.01"))).doubleValue();
+
+                        
 			System.out.print("Loading precomputed min energy matrix...");
 			rs.loadPairwiseEnergyMatrices(minEmatrixFile,true);
 			System.out.println("done");
@@ -1788,6 +1853,15 @@ public class KSParser
 					initialBest =  initialBest.multiply(cObj.q[i]);
 			}
 
+
+                        if(cObj.es.useEPIC)
+                            loadCETMatrix(cObj.params,rs,curStr-1,0,true);
+                        //strandPresent from loadCETMatrix is the strand number if positive,
+                        //-1 for the complex
+                        //which corresponds to curStr-1 here
+                        //THIS SHOULD ALREADY BE CALCULATED, ONCE FOR ALL MUTANTS...
+
+
 			rs.slaveDoRotamerSearch(runNum, cObj.computeEVEnergy,cObj.doMinimization,numberMutable,
 				strandMut,usingInitialBest,initialBest,cObj,cObj.minimizeBB,false,cObj.pdbName,cObj.doBackrubs,cObj.backrubFile,
 				cObj.saveTopConfs, cObj.printTopConfs, cObj.numTopConfs, cObj.curMut,
@@ -1816,6 +1890,67 @@ public class KSParser
 		return cObj;
 	}
 	
+        
+        
+        boolean doClashFilter(CommucObj cObj){
+            //demand to have alternate ligand clash in all confs,
+            //and desired ligand to have >0 non-clashing confs
+            //if demands are not meant prune the sequences (by returning true)
+
+            System.out.println("Running clash filter...");
+
+
+            String thisCETMName = cObj.params.getValue("CETMATRIXNAME",cObj.params.getValue("RUNNAME")+"CETM") + "_COM.dat";
+            String altCETMName = cObj.params.getValue("ALTCETMNAME");
+            //precomputed CETM w/ alternate ligand 
+            //must have same mutable residues
+
+            CETMatrix altCETM = (CETMatrix)KSParser.readObject(altCETMName);
+            CETMatrix thisCETM = (CETMatrix)KSParser.readObject(thisCETMName);//main ligand
+
+            
+            int curSeq[] = new int[altCETM.numRes];
+            
+            for(int res=0; res<altCETM.numRes; res++){
+                
+                curSeq[res] = -1;
+                for(int index=0; index<altCETM.resAATypes[res].length; index++){
+                    if( altCETM.resAATypes[res][index].equalsIgnoreCase(cObj.currentMutation[res]) ){
+                        curSeq[res] = index;
+                        break;
+                    }
+                }
+                
+                if(curSeq[res]==-1){
+                    System.err.println("ERROR: ClashFilter can't identify residue "+cObj.currentMutation[res]+" for res# "+res);
+                    System.exit(1);
+                }
+            }
+
+
+
+            double cutoff = Double.valueOf(cObj.params.getValue("CLASHFILTERCUTOFF","10"));
+            //total energy except for shell-shell interactions (so 10 means substantial net unfavorable contacts in active site)
+
+            ClashFilter cfAlt = new ClashFilter(altCETM,curSeq,cutoff);
+            if(cfAlt.hasNonClashing()){
+                System.out.println("Sequence accommodates alt ligand");
+                return true;
+            }
+            else {
+                ClashFilter cfHere = new ClashFilter(thisCETM,curSeq,cutoff);
+                if(!cfHere.hasNonClashing()){
+                    System.out.println("Sequence does not accommodate ligand");
+                    return true;
+                }
+            }
+
+            System.out.println("Clash filter passed.");
+            return false;
+        }
+        
+        
+        
 	//Load the pairwise energy matrices; if not computed, compute, and the load
 	//KER: strandPresent represents the strand that is present for this matrix (complex is -1)
 	private void loadPairwiseEnergyMatrices(ParamSet sParams, RotamerSearch rs, String minMatrixFile, boolean doMinimize, String maxMatrixFile,
@@ -1839,8 +1974,9 @@ public class KSParser
 			newParams.setParamsValues(sParams.getParams(), sParams.getValues(), sParams.getCurNum());
 			newParams.setValue("MINENERGYMATRIXNAME", sParams.getValue("MINENERGYMATRIXNAME",runName+"minM")+suffix);
 	  		newParams.setValue("MAXENERGYMATRIXNAME", sParams.getValue("MAXENERGYMATRIXNAME",runName+"maxM")+suffix);
+
 			newParams.setValue("ONLYSINGLESTRAND", new Integer(strandPresent).toString());
-			handleComputeAllPairwiseRotamerEnergiesMaster(newParams);
+			handleComputeAllPairwiseRotamerEnergiesMaster(newParams,false,null,null,0,false,rs.es);
 			
 			long stopTime = System.currentTimeMillis();
 			System.out.println("PEM execution time: "+((stopTime-startTime)/(60.0*1000.0)));
@@ -1849,8 +1985,76 @@ public class KSParser
 			rs.loadPairwiseEnergyMatrices(minMatrixFile+suffix,true);
 			if (doMinimize)
 				rs.loadPairwiseEnergyMatrices(maxMatrixFile+suffix,false);
+
 		}
 	}
+
+
+
+        private void loadCETMatrix( ParamSet sParams, RotamerSearch rs, int strandPresent, double ival, boolean local ){
+                String runName = sParams.getValue("RUNNAME");
+		String suffix = "_" + strandPresent+".dat";
+		if(strandPresent == COMPLEX )
+			suffix = "_COM.dat";
+
+                String CETMatrixName = (String)sParams.getValue("CETMATRIXNAME",runName+"CETM") + suffix;
+                rs.loadCETMatrix(CETMatrixName);
+
+                if( rs.cetm != null ){//Check if the continuous energy matrix is present and complete enough
+                    if(rs.cetm.ivalCutoff >= ival)
+                        return;
+                }
+
+                //If we get here we have to compute the matrix
+                System.out.println("Precomputed level-set bound matrix not available..");
+
+                long startTime = System.currentTimeMillis();
+                ParamSet newParams = new ParamSet();
+                newParams.setParamsValues(sParams.getParams(), sParams.getValues(), sParams.getCurNum());
+                newParams.setValue("CETMATRIXNAME", CETMatrixName);
+
+                newParams.setValue("ONLYSINGLESTRAND", new Integer(strandPresent).toString());
+                handleComputeAllPairwiseRotamerEnergiesMaster( newParams, true, rs.eliminatedRotAtRes, rs.splitFlags, ival, local, rs.es );
+
+                long stopTime = System.currentTimeMillis();
+                System.out.println("Level-set bound matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
+                System.out.println("DONE: Pairwise energy matrix precomputation");
+
+                rs.loadCETMatrix(CETMatrixName);
+	}
+        
+        
+        private void loadUnboundCETMatrix( ParamSet sParams, RotamerSearch rs, double ival, boolean local, int unboundStrand ){
+                
+                String runName = sParams.getValue("RUNNAME");
+                String suffix = "_" + unboundStrand + ".dat";
+
+                String CETMatrixName = (String)sParams.getValue("CETMATRIXNAME",runName+"CETM") + suffix;
+                rs.loadCETMatrix(CETMatrixName);
+
+                if( rs.cetm != null ){//Check if the continuous energy matrix is present and complete enough
+                    if(rs.cetm.ivalCutoff >= ival)
+                        return;
+                }
+
+                //If we get here we have to compute the matrix
+                System.out.println("Precomputed unbound level-set bound matrix not available..");
+
+                long startTime = System.currentTimeMillis();
+                ParamSet newParams = new ParamSet();
+                newParams.setParamsValues(sParams.getParams(), sParams.getValues(), sParams.getCurNum());
+                newParams.setValue("CETMATRIXNAME", CETMatrixName);
+
+                newParams.setValue("ONLYSINGLESTRAND", "-1");
+                handleComputeAllPairwiseRotamerEnergiesMaster( newParams, true, rs.eliminatedRotAtRes, rs.splitFlags, ival, local, rs.es );
+
+                long stopTime = System.currentTimeMillis();
+                System.out.println("Level-set bound matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
+                System.out.println("DONE: Pairwise energy matrix precomputation");
+
+                rs.loadCETMatrix(CETMatrixName);
+        }
+
 	
 	//Load the pairwise energy matrices; if not computed, compute, and the load
 	//KER: strandPresent represents the strand that is present for this matrix (complex is -1)
@@ -1876,7 +2080,7 @@ public class KSParser
 			newParams.setValue("MINENERGYMATRIXNAME", sParams.getValue("MINENERGYMATRIXNAME",runName+"minM")+suffix);
 			newParams.setValue("MAXENERGYMATRIXNAME", sParams.getValue("MAXENERGYMATRIXNAME",runName+"maxM")+suffix);
 			newParams.setValue("ONLYSINGLESTRAND", "-1");
-			handleComputeAllPairwiseRotamerEnergiesMaster(newParams);
+                        handleComputeAllPairwiseRotamerEnergiesMaster(newParams,false,null,null,0,false,rs.es);
 			
 			long stopTime = System.currentTimeMillis();
 			System.out.println("PEM execution time: "+((stopTime-startTime)/(60.0*1000.0)));
@@ -1911,7 +2115,7 @@ public class KSParser
   		  sParams.setValue("MINENERGYMATRIXNAME", sParams.getValue("MINENERGYMATRIXNAME",runName+"minM")+suffix);
   		  sParams.setValue("MAXENERGYMATRIXNAME", sParams.getValue("MAXENERGYMATRIXNAME",runName+"maxM")+suffix);
   		  
-          handleComputeAllPairwiseRotamerEnergiesMaster(sParams);
+          handleComputeAllPairwiseRotamerEnergiesMaster(sParams, false, null, null, 0, false, new EPICSettings());
     }
 
 	
@@ -1922,7 +2126,9 @@ public class KSParser
 	 * are computed: intra-rotamer, rotamer-to-template, rotamer-rotamer, and template-only energies. If a ligand is
 	 * present, all energies involving the ligand are also computed.
 	 */
-	public void handleComputeAllPairwiseRotamerEnergiesMaster(ParamSet sParams) {	
+	public void handleComputeAllPairwiseRotamerEnergiesMaster(ParamSet sParams, boolean compCETM, PrunedRotamers<Boolean> prunedRot, boolean[][][][][][] splitFlags, double ival, 
+                boolean local, EPICSettings es ) {
+            //If compCETM is true we calculate a continuous energy matrix, using the given pruning information (this can prunedRot=splitFlags=null and ival=arbitrary otherwise)
 		
 		int numMutations = 2; //pairwise energies are computed
 		boolean doMinimize = (new Boolean((String)sParams.getValue("DOMINIMIZE", "false"))).booleanValue();
@@ -1935,7 +2141,7 @@ public class KSParser
 		String runName = (String)sParams.getValue("RUNNAME");
 		String minEMatrixName = (String)sParams.getValue("MINENERGYMATRIXNAME",runName+"minM");
 		String maxEMatrixName = (String)sParams.getValue("MAXENERGYMATRIXNAME",runName+"maxM");
-		String eRefMatrix = (String)(sParams.getValue("EREFMATRIXNAME","Eref"));
+		String eRefMatrix = (String)(sParams.getValue("EREFMATRIXNAME","Eref"+runName));
 		boolean templateAlwaysOn = (new Boolean((String)sParams.getValue("TEMPLATEALWAYSON","false"))).booleanValue();
 				
 		int curStrForMatrix = (new Integer((String)sParams.getValue("ONLYSINGLESTRAND","-1"))).intValue();
@@ -1947,7 +2153,7 @@ public class KSParser
                 boolean minimizePerts = (new Boolean((String)sParams.getValue("MINIMIZEPERTURBATIONS","false"))).booleanValue();//Allow continuous minimization with respect to perturbation parameters
 		Perturbation.idealizeSC = (new Boolean((String)sParams.getValue("IDEALIZESIDECHAINS","true"))).booleanValue();
 
-
+                
                 boolean addWTRotsSomehow = (new Boolean((String)sParams.getValue("ADDWTROTS","false"))).booleanValue();
                 boolean addOrigRots = false, addWTRot = false;
                 if( addWTRotsSomehow ){
@@ -1957,7 +2163,18 @@ public class KSParser
                         addOrigRots = true;
                 }
 
-		
+                boolean minimizePairwise = (new Boolean((String)sParams.getValue("MINIMIZEPAIRWISE","true"))).booleanValue();
+                boolean useCCD = (new Boolean((String)sParams.getValue("USECCD","true"))).booleanValue();
+                String CETMatrixName = (String)sParams.getValue("CETMATRIXNAME",runName+"CETM");
+
+                CCDMinimizer.EConvTol = (new Double((String)sParams.getValue("ECONVTOL","0.01"))).doubleValue();
+                //ContSCObjFunction.gradStep = (new Double((String)sParams.getValue("GRADSTEP","0.0002"))).doubleValue();
+
+                if( ( minimizePairwise && (!useCCD) ) || ( compCETM && (!minimizePairwise) ) ) {
+                    System.err.println("ERROR: CCD needed for only-pairwise minimization, which in turn is needed for EPIC");
+                    System.exit(1);
+                }
+
 		if (!doMinimize) //no minimization
 			minimizeBB = false;
 		if (!minimizeBB) //not backbone minimization
@@ -1974,7 +2191,7 @@ public class KSParser
 		String[][] strandDefault = mp.strandDefault;
 		
 		if(addOrigRots)
-			RotamerLibrary.addOrigRots(strandMut, EnvironmentVars.aaRotLib, m);
+			RotamerLibrary.addOrigRots(strandMut, EnvironmentVars.aaRotLib, m);         
 		
 		System.out.println("Run Name: "+runName);
 		System.out.println("Precomputed Minimum Energy Matrix: "+minEMatrixName);
@@ -1988,7 +2205,7 @@ public class KSParser
 				
 		RotamerSearch rs = new RotamerSearch(m, numberMutable, strandsPresent, hElect, hVDW, hSteric, true,
 				true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst, doDihedE, 
-                                doSolvationE, solvScale, softvdwMultiplier, grl, doPerturbations, pertFile, minimizePerts, false, false);
+                                doSolvationE, solvScale, softvdwMultiplier, grl, doPerturbations, pertFile, minimizePerts, false, false, es);
 		
 		rs.initMutRes2Str(strandMut);
 		
@@ -2010,6 +2227,18 @@ public class KSParser
 				molStrand++;
 			}
 		}
+                
+                
+                //select perturbations for strand if appropriate
+                //(for K* this needs to be done here, with strand-only molecule)
+                if(curStrForMatrix!=COMPLEX){
+                    boolean selectPerturbations = (new Boolean((String)sParams.getValue("SELECTPERTURBATIONS","false"))).booleanValue();//Should perturbations be automatically selected?
+                    if(selectPerturbations)//Need to run the automatic perturbation selection
+                        selectPerturbations(mp, doPerturbations, pertFile, minimizePerts, addWTRot, sParams);
+                }
+                
+                                
+                
 
                 if(doPerturbations)
                     rs.setupRCs(addWTRot);
@@ -2019,16 +2248,16 @@ public class KSParser
 		PairwiseEnergyMatrix mutationEnergiesMax = null;
 		if(doMinimize)
 			mutationEnergiesMax = mutationEnergiesMin.copy();
-		float eRef[][] = new float[numberMutable][];
+		double eRef[][] = new double[numberMutable][];
 		int ctr = 0;
 		for (int str=0;str<strandMut.length;str++){
 			for (int j=0; j<strandMut[str].length; j++){
-		        eRef[ctr] = new float[rs.strandRot[str].rl.getNumAAallowed()];
+		        eRef[ctr] = new double[rs.strandRot[str].rl.getNumAAallowed()];
 		        ctr++;
 			}
 		}
-		
-		
+
+			
 		OneMutation mutArray[] = getMutArrayPairEcomp(numberMutable,minimizeBB);
 
 		//Sort the mutation list
@@ -2082,20 +2311,51 @@ public class KSParser
                 mutMan.setIdealizeSC(Perturbation.idealizeSC);
                 mutMan.setAddWTRot(addWTRot);
 
+                mutMan.setUseCCD(useCCD);
+                mutMan.setMinimizePairwise(minimizePairwise);
+                
+                mutMan.setES(es);
 
-		try{
-			handleDoMPIMaster(mutMan,mutArray.length);
-		}
-		catch (Exception e){
-			System.out.println("ERROR: "+e);
-			e.printStackTrace();
-			System.exit(1);
-		}
-		
-		outputObject(mutMan.getMinEmatrix().eMatrix,minEMatrixName);
-		if (doMinimize)
-			outputObject(mutMan.getMaxEmatrix().eMatrix,maxEMatrixName);
-		
+                
+                if(compCETM){
+                    mutMan.setCompCETM(true);
+                    m.DOFs = DegreeOfFreedom.makeDOFArray(rs.strandRot, strandMut,
+                            rs.mutRes2Strand, rs.mutRes2StrandMutIndex, m, strandDefault);
+
+
+                    CETMatrix lsbm = new CETMatrix(numberMutable,strandMut,rs);
+                    lsbm.ivalCutoff = ival;
+                    mutMan.setCETM(lsbm);
+
+                    mutMan.setPrunedRot(prunedRot);
+                    mutMan.setSpFlags(splitFlags);
+                }
+
+                mutMan.setEConvTol(CCDMinimizer.EConvTol);
+
+                if(local){
+                    handleMasterLocally(mutMan,mutArray.length);
+                }
+                else{
+                    try{
+                            handleDoMPIMaster(mutMan,mutArray.length);
+                    }
+                    catch (Exception e){
+                            System.out.println("ERROR: "+e);
+                            e.printStackTrace();
+                            System.exit(1);
+                    }
+                }
+
+                if(compCETM){
+                    outputObject(mutMan.cetm,CETMatrixName);
+                }
+                else{
+                    outputObject(mutMan.getMinEmatrix().eMatrix,minEMatrixName);
+                    if (doMinimize)
+                    	outputObject(mutMan.getMaxEmatrix().eMatrix,maxEMatrixName);
+                }
+                    
 		System.out.println("DONE: Pairwise energy matrix precomputation..");
 	}
 	
@@ -2106,26 +2366,46 @@ public class KSParser
 	public CommucObj handleComputeAllPairwiseRotamerEnergiesSlave(CommucObj cObj) {
 				
 		long startTime = System.currentTimeMillis();
-						
+                
 		//Setup the molecule system
 		Molecule m = new Molecule();
 		//CurStrForMatrix starts at -1 so push everything up one;
 		int curComplex = cObj.curStrForMatrix+1;
+                int unboundStrand = Integer.valueOf( cObj.params.getValue("UNBOUNDSTRAND","-1") );//MH: If using a special unbound structure,
+                //curStrForMatrix is -1 (as needed since we need to use the whole unbound structure),
+                //so we need to handle the strand number for molecule reloading and .dat file numbering separately
+                if(unboundStrand!=-1)
+                    curComplex = unboundStrand+1;
+                        
+                
 		if(mols[curComplex] == null || cObj.doPerturbations ){//The molecule must be reloaded for DEEPer because the perturbation states are unknown and we might need WT rotamers
-            m = setupMolSystem(m,cObj.params,cObj.strandPresent,cObj.strandLimits);
-            mols[curComplex] = m;
-            rotLibs[curComplex] = grl;
-        }
-        else{
-            m = mols[curComplex];
-            grl = rotLibs[curComplex];
-        }
+                    m = setupMolSystem(m,cObj.params,cObj.strandPresent,cObj.strandLimits);
+
+                    mols[curComplex] = m;
+                    rotLibs[curComplex] = grl;
+                }
+                else{
+                    m = mols[curComplex];
+                    grl = rotLibs[curComplex];
+                }
 		
 		RotamerSearch rs = new RotamerSearch(m,cObj.mutableSpots, cObj.strandsPresent, hElect, hVDW, hSteric, true,
 				true, cObj.epsilon, cObj.stericThresh, cObj.softStericThresh, cObj.distDepDielect, cObj.dielectConst, 
                                 cObj.doDihedE,cObj.doSolvationE,cObj.solvScale,cObj.vdwMult,grl,
-                                cObj.doPerturbations,cObj.pertFile,cObj.minimizePerts,false,false);
-	
+                                cObj.doPerturbations,cObj.pertFile,cObj.minimizePerts,false,false,cObj.es);
+
+                rs.useCCD = cObj.useCCD;
+                rs.minimizePairwise = cObj.minimizePairwise;
+                
+                //for use in K* CETM calculations
+                rs.templateSt = (new Double((String)cObj.params.getValue("STERICE","30.0"))).doubleValue();
+                rs.pairSt = (new Double((String)cObj.params.getValue("PAIRST", "100.0"))).doubleValue();
+
+
+                CCDMinimizer.EConvTol = cObj.EConvTol;
+                //ContSCObjFunction.gradStep = cObj.gradStep;
+
+
 		rs.initMutRes2Str(cObj.strandMut);
 		
 		//System.out.println("Beginning setAllowables");
@@ -2197,29 +2477,41 @@ public class KSParser
 		//  ligand to each active site residue pairwise energy, and the ligand self intra-
 		//  residue energy.
 		
-		//initialize the pairwise energy matrices (partial initialization - only for the residues involved in this computation, e.g., AS-AS)
+                if(cObj.compCETM){
+                    //Need to provide rs with pruning information so only unpruned RCs or pairs get energies computed
+                    rs.eliminatedRotAtRes = cObj.prunedRot;
+                    rs.splitFlags = cObj.splitFlags;
+                }
+                    //initialize the pairwise energy matrices (partial initialization - only for the residues involved in this computation, e.g., AS-AS)
 		PairwiseEnergyMatrix minEmatrix = new PairwiseEnergyMatrix(cObj.mutableSpots,cObj.resMut,cObj.strandMut,
-				rs,shellRun,intraRun,false);
+                            rs,shellRun,intraRun,false);
 		PairwiseEnergyMatrix maxEmatrix = null;
-		if(cObj.doMinimization)
+                if(cObj.doMinimization)
                     maxEmatrix = minEmatrix.copy();
-		else  //PGC
+                else  //PGC
                     maxEmatrix = minEmatrix;
-		
-		
+
+
 		//Compute the corresponding matrix entries
 		rs.simplePairwiseMutationAllRotamerSearch(cObj.strandMut,cObj.mutableSpots,cObj.doMinimization,shellRun,intraRun,
 				cObj.resMut,minEmatrix,maxEmatrix,cObj.minimizeBB,cObj.doBackrubs,
-				templateOnly,cObj.backrubFile, cObj.templateAlwaysOn);
+				templateOnly,cObj.backrubFile, cObj.templateAlwaysOn, cObj.strandDefault,cObj.compCETM);
 		
 		
 		long stopTime = System.currentTimeMillis();
 		cObj.elapsedTime = Math.round((stopTime - startTime) / 1000.0f);
 		
 		
-		//Store the information in less space to allow the master node to buffer several cObj at once
-		cObj.compEE = minEmatrix.generateCompEE(maxEmatrix);
-		
+                if(cObj.compCETM)
+                    cObj.cetm = rs.cetm;
+                else{
+                    //Store the information in less space to allow the master node to buffer several cObj at once
+                    cObj.compEE = minEmatrix.generateCompEE(maxEmatrix);
+                }
+                
+                //KER: reset evalAtoms
+                m.setAllEval(); 
+
 		return cObj;
 	}
 	
@@ -2388,7 +2680,7 @@ public class KSParser
                 String pertFile = (String)sParams.getValue("PERTURBATIONFILE","defaultPerturbationFileName.pert");//Input file giving perturbation information
                 boolean minimizePerts = (new Boolean((String)sParams.getValue("MINIMIZEPERTURBATIONS","false"))).booleanValue();//Allow continuous minimization with respect to perturbation parameters
 		Perturbation.idealizeSC = (new Boolean((String)sParams.getValue("IDEALIZESIDECHAINS","true"))).booleanValue();
-
+                boolean useCCD = (new Boolean((String)sParams.getValue("USECCD","true"))).booleanValue();
 
                 boolean addWTRotsSomehow = (new Boolean((String)sParams.getValue("ADDWTROTS","false"))).booleanValue();
                 boolean addOrigRots = false, addWTRot = false;
@@ -2412,7 +2704,8 @@ public class KSParser
 		int numOfStrands = strandMut.length;
 		int mutRes2Strand[] = mp.mutRes2Strand;
 		int mutRes2StrandMutIndex[] = mp.mutRes2StrandMutIndex;
-		
+
+
 		if(addOrigRots)
 			RotamerLibrary.addOrigRots(strandMut, EnvironmentVars.aaRotLib, m);
 		
@@ -2502,16 +2795,29 @@ public class KSParser
 			SimpleMinimizer simpMin = null;
 			BBMinimizer bbMin = null;
 			BackrubMinimizer brMin = null;
+                        CCDMinimizer ccdMin = null;
+
+                        EnergyFunction ef = new ForceFieldEnergy(m, a96ff);
+                        ContSCObjFunction of = null;
+
+
 			if ( doMinimize && (!minimizeBB) ){
+
+                            if(useCCD){
+                                m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, strandDefault);
+                                of = new ContSCObjFunction(m,numOfStrands,ef,strandRot,curAA,doDihedE,null);
+                                ef = of.efunc;//Dihedral energies now included if needed
+                                ccdMin = new CCDMinimizer(of,false);
+                            }
+                            else{
+
                                 if(doPerturbations)
                                     simpMin = new PMinimizer(minimizePerts);
                                 else
                                     simpMin = new SimpleMinimizer();
-				/*if(ligPresent)
-					simpMin.initialize(m,0,1,a96ff,sysLR,ligLR2,curAA,ligLR2.getIndexOfNthAllowable(0,0),doDihedE,rl,grl);
-				else*/
 				simpMin.initialize(m,numOfStrands,a96ff,strandRot,curAA,doDihedE);
-			}
+                            }
+                        }
 			else if (minimizeBB) {
 				if (!doBackrubs){
 					bbMin = new BBMinimizer();
@@ -2557,10 +2863,18 @@ public class KSParser
 			if (outputPDB){ //save molecule
 				String fName = runName;
 				String filename = String.format("pdbs/%1$s_%2$03d_unmin.pdb",fName,numSaved);
-				saveMolecule(m,filename,(float)unMinE[0]);
+				saveMolecule(m,filename,(double)unMinE[0]);
             }
-			if ( doMinimize && (!minimizeBB) )
-				simpMin.minimize(35);
+			if ( doMinimize && (!minimizeBB) ){
+                                long minimizeStartTime = System.currentTimeMillis();
+				if(useCCD){
+                                    of.updateIdealDihedrals();//Dihedrals are now in the ideal rotameric states
+                                    of.setDOFs( ccdMin.minimize() );
+                                }
+                                else
+                                    simpMin.minimize(35);
+                                System.out.println( "Minimization time (ms): "+(System.currentTimeMillis()-minimizeStartTime) );
+                        }
 			else if (minimizeBB) {
 				if (!doBackrubs)
 					bbMin.minimizeFull(false);
@@ -2569,14 +2883,16 @@ public class KSParser
 				}
 			}
 			
-			double minE[] = a96ff.calculateTotalEnergy(m.actualCoordinates,-1); //the energy after minimization
+			/*double minE[] = a96ff.calculateTotalEnergy(m.actualCoordinates,-1); //the energy after minimization
 			if ((doMinimize)&&(!minimizeBB)&&(doDihedE)) //add dihedral energies
 				minE[0] += simpMin.computeDihedEnergy();
-			
+			*/
+                        double minE[] = { ef.getEnergy() };
+
 			if (outputPDB){ //save molecule
 				String fName = runName;
 				String filename = String.format("pdbs/%1$s_%2$03d_min.pdb",fName,numSaved);
-				saveMolecule(m,filename,(float)minE[0]);
+				saveMolecule(m,filename,(double)minE[0]);
 				numSaved++;
 			}
 
@@ -2662,13 +2978,13 @@ public class KSParser
                 //Data to output
                 String AAtypes[] = new String[numMutable];
 		int curRot[] = new int[numMutable];
-                float maxDev[] = new float[numMutable];//Maximum deviation of a dihedral from the rigid-rotamer value
+                double maxDev[] = new double[numMutable];//Maximum deviation of a dihedral from the rigid-rotamer value
 
 		
                 //Find the rotamer at each position with the minimax deviation from the real structure
                 for(int j=0; j<numMutable; j++){
 
-                    maxDev[j] = Float.POSITIVE_INFINITY;
+                    maxDev[j] = Double.POSITIVE_INFINITY;
 
                     //Get information on the residue
                     int str = mp.mutRes2Strand[j];
@@ -2711,15 +3027,15 @@ public class KSParser
 
                         for(int symm=0; symm<symmCount; symm++){//Check each symmetry state against them
 
-                            float rotMaxDev = Float.NEGATIVE_INFINITY;
+                            double rotMaxDev = Double.NEGATIVE_INFINITY;
                              //Maximum dihedral deviation between the structure (in the current symmetry)
                              //and the current rotamer
 
                             for(int k=0; k<numDihedrals; k++){
 
-                                float idealDih = curRL.getRotamerValues(AATypeInd, rot, k);
+                                double idealDih = curRL.getRotamerValues(AATypeInd, rot, k);
 
-                                float dev = (float)Math.abs( idealDih - curDih[k][symm] );//the angles' absolute values can't exceed 180 so this is at most 360
+                                double dev = (double)Math.abs( idealDih - curDih[k][symm] );//the angles' absolute values can't exceed 180 so this is at most 360
                                 dev = Math.min(dev, 360-dev);//dev is the absolute difference between the angles, which are mod 360
 
                                 if( dev > rotMaxDev )
@@ -2757,6 +3073,67 @@ public class KSParser
                 for(int j=0; j<numMutable; j++)
                     System.out.print( maxDev[j] + " " );
                 System.out.println();
+        }
+        
+        
+        
+        
+        
+        
+        
+        //Make a reduced PDB file containing just the designed residues
+        //specified with regular configuration files
+        //plus any residues within shellThickness
+        //(extra parameters required are shellThickness and shellPDBFile)
+        public void makeStericShell(String s){
+
+                ParamSet sParams = new ParamSet();
+		sParams.addParamsFromFile(getToken(s,2)); //read system parameters
+                sParams.addParamsFromFile(getToken(s,3)); //read mutation search parameters
+
+
+                //Setup the molecule system
+                MolParameters mp = loadMolecule(sParams, COMPLEX);
+                int numMutable = mp.numberMutable;
+                String shellPDBFile = (String)sParams.getValue("SHELLPDBFILE");
+                double shellThickness = (new Double((String)sParams.getValue("SHELLTHICKNESS"))).doubleValue();
+                
+                Molecule newMolec = new Molecule();//only designed residues + those within shellThickness of them
+                newMolec.addStrand();
+                
+                HashSet<Integer> des = new HashSet<Integer>();//molecule residue numbers of designed residues
+                
+                //Add the designed residues to the shell
+                for(int j=0; j<numMutable; j++){
+
+                    //Get information on the residue
+                    int str = mp.mutRes2Strand[j];
+                    int strResNum = mp.strandMut[str][mp.mutRes2StrandMutIndex[j]];
+                    Residue res = mp.m.strand[str].residue[strResNum];
+                    des.add(res.moleculeResidueNumber);
+                }
+                
+                ArrayList<Integer> newMolecRes = new ArrayList<Integer>();
+                //molecule residue numbers of residues in the new molecule
+                
+                for(Residue res : mp.m.residue){
+                    int molResNum = res.moleculeResidueNumber;
+                    if(des.contains(molResNum))
+                        newMolecRes.add(molResNum);
+                    else{
+                        for(int molResNum2 : des){//get distances to shell residues
+                            if(res.getDist(mp.m.residue[molResNum2], true) <= shellThickness){
+                                newMolecRes.add(molResNum);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                for(int molResNum : newMolecRes)
+                    newMolec.addResidue(0, mp.m.residue[molResNum]);
+                
+                saveMolecule(newMolec,shellPDBFile,0);
         }
 
 ////////////////////////////////////////////////////////////////
@@ -2810,14 +3187,14 @@ public class KSParser
 		boolean scaleInt = (new Boolean((String)sParams.getValue("SCALEINT", "false"))).booleanValue();
 		String runNameEMatrixMin = (String)(sParams.getValue("MINENERGYMATRIXNAME",runName+"minM" ));
 		String runNameEMatrixMax = (String)(sParams.getValue("MAXENERGYMATRIXNAME",runName+"maxM" ));
-		float initEw = (new Float((String)sParams.getValue("INITEW","0"))).floatValue();
-		float lambda = (new Float((String)sParams.getValue("LAMBDA", "0"))).floatValue();
-		float pruningE = (new Float((String)sParams.getValue("PRUNINGE", "100.0"))).floatValue();
+		double initEw = (new Double((String)sParams.getValue("INITEW","0"))).doubleValue();
+		double lambda = (new Double((String)sParams.getValue("LAMBDA", "0"))).doubleValue();
+		double pruningE = (new Double((String)sParams.getValue("PRUNINGE", "100.0"))).doubleValue();
 		double stericE = (new Double((String)sParams.getValue("STERICE","30.0"))).doubleValue();
-		float pairSt = (new Float((String)sParams.getValue("PAIRST", "100.0"))).floatValue();
-                float maxIntScale =0;
+		double pairSt = (new Double((String)sParams.getValue("PAIRST", "100.0"))).doubleValue();
+                double maxIntScale =0;
                 if(scaleInt){
-		  maxIntScale = (new Float((String)sParams.getValue("MAXINTSCALE","0"))).floatValue();
+		  maxIntScale = (new Double((String)sParams.getValue("MAXINTSCALE","0"))).doubleValue();
                 }
 		double minRatioDiff=0;
 		int initDepth = 0;
@@ -2830,11 +3207,11 @@ public class KSParser
 		  diffFact = (new Integer((String)sParams.getValue("DIFFFACT"))).intValue();	
                 }                
 		boolean genInteractionGraph = (new Boolean((String)sParams.getValue("GENINTERACTIONGRAPH","false"))).booleanValue();
-		float distCutoff=0;
-		float eInteractionCutoff=0;
+		double distCutoff=0;
+		double eInteractionCutoff=0;
                 if(genInteractionGraph){
-		  distCutoff = (new Float((String)sParams.getValue("DISTCUTOFF"))).floatValue();
-		  eInteractionCutoff = (new Float((String)sParams.getValue("EINTERACTIONCUTOFF"))).floatValue();
+		  distCutoff = (new Double((String)sParams.getValue("DISTCUTOFF"))).doubleValue();
+		  eInteractionCutoff = (new Double((String)sParams.getValue("EINTERACTIONCUTOFF"))).doubleValue();
                 }
 		String outputConfInfo = (String)(sParams.getValue("OUTPUTCONFINFO","c_"+runName));
 		String outputPruneInfo = (String)(sParams.getValue("OUTPUTPRUNEINFO","p_"+runName));
@@ -2853,11 +3230,11 @@ public class KSParser
 		//   MinDEE will use traditional DEE with an energy window (initEw) 
 		//   for pruning.  Max terms will be ignored and only the min terms for pruning and 
 		boolean useMinDEEPruningEw = (new Boolean((String)sParams.getValue("imindee", "false"))).booleanValue();
-		float Ival = 0.0f;
-		float interval = 0;
+		double Ival = 0.0f;
+		double interval = 0;
 		if(useMinDEEPruningEw)
-			Ival = (new Float((String)sParams.getValue("IVAL"))).floatValue();
-		float difference = Ival;
+			Ival = (new Double((String)sParams.getValue("IVAL"))).doubleValue();
+		double difference = Ival;
 
 
                 boolean useTriples = (new Boolean((String)sParams.getValue("USETRIPLES","false"))).booleanValue();
@@ -2874,8 +3251,16 @@ public class KSParser
                 String screenOutFile = ((String)sParams.getValue("SCREENOUTFILE","screenOutFileDefaultName.pert"));//Name of file for outputting results of screen (same format as PERTURBATIONFILE)
 		boolean selectPerturbations = (new Boolean((String)sParams.getValue("SELECTPERTURBATIONS","false"))).booleanValue();//Should perturbations be automatically selected?
                 Perturbation.idealizeSC = (new Boolean((String)sParams.getValue("IDEALIZESIDECHAINS","true"))).booleanValue();
+
+                boolean useCCD = (new Boolean((String)sParams.getValue("USECCD","true"))).booleanValue();//CCD minimization
+                EPICSettings es = new EPICSettings(sParams);
+                if(Ival+initEw>es.EPICThresh2){
+                    System.out.println("EPICThresh2 must be at least Ival+Ew: raising to Ival="+(Ival+initEw));
+                    es.EPICThresh2 = Ival+initEw;
+                }
                 
-                
+                CCDMinimizer.EConvTol = (new Double((String)sParams.getValue("ECONVTOL","0.01"))).doubleValue();
+
                 boolean addWTRotsSomehow = (new Boolean((String)sParams.getValue("ADDWTROTS","false"))).booleanValue();
                 boolean addOrigRots = false, addWTRot = false;
                 if( addWTRotsSomehow ){
@@ -2941,10 +3326,12 @@ public class KSParser
 
 			RotamerSearch rs = new RotamerSearch(mp.m,mp.numberMutable, mp.strandsPresent, hElect, hVDW, hSteric, true,
 					true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst, doDihedE, doSolvationE, solvScale, softvdwMultiplier, grl,
-                                        doPerturbations, pertFile, minimizePerts, useTriples, useFlagsAStar);
+                                        doPerturbations, pertFile, minimizePerts, useTriples, useFlagsAStar, es);
+
+                        rs.useCCD = useCCD;
 			
 			rs.initMutRes2Str(mp.strandMut);
-	
+
 			System.out.print("Loading precomputed energy matrix...");
 			loadPairwiseEnergyMatrices(sParams,rs,runNameEMatrixMin,doMinimize,runNameEMatrixMax,curStrForMatrix);
 			System.out.println("done");
@@ -2972,9 +3359,9 @@ public class KSParser
                         if(doPerturbations)
                             rs.setupRCs(addWTRot);
 			
-			float eRef[][] = null;
+			double eRef[][] = null;
 			if (useEref) { //add the reference energies to the min (and max) intra-energies
-				String eRefName = sParams.getValue("EREFMATRIXNAME", "Eref");
+				String eRefName = sParams.getValue("EREFMATRIXNAME", "Eref"+runName);
 				eRef = RotamerSearch.loadErefMatrix(eRefName+".dat");
 				//eRef = getResEntropyEmatricesEref(useEref,rs.getMinMatrix(),rs.strandRot,mp.strandMut,null,mp.numberMutable,mp.mutRes2Strand,mp.mutRes2StrandMutIndex);
 				rs.addEref(eRef, doMinimize, mp.strandMut);
@@ -2982,7 +3369,7 @@ public class KSParser
 			if(EnvironmentVars.useEntropy)
 				rs.addEntropyTerm(doMinimize, mp.strandMut);
 			
-			
+
 			PrunedRotamers<Boolean> prunedRotAtRes = new PrunedRotamers<Boolean>(mp.numberMutable,mp.strandMut,rs,false);
 			
 			final String rotFile = ("rot_out"+System.currentTimeMillis()); //output the pruned rotamers (for distributed DEE)
@@ -3015,7 +3402,7 @@ public class KSParser
 				rs.setSplitFlags();//initialize the split flags
 
                         if(useFlags){
-                            float cutoff = (float)stericE;
+                            double cutoff = stericE;
                             if ( preprocPairs && (pairSt < stericE) )
                                     cutoff = pairSt;
                             rs.pruneRidiculousPairs(mp.numberMutable, mp.strandMut,
@@ -3059,7 +3446,7 @@ public class KSParser
 				//Depending on the chosen algorithm option, apply the corresponding pruning criteria;			
 				System.out.println("Starting pruning with DEE (simple Goldstein)");		
 				prunedRotAtRes = rs.DoDEEGoldstein(mp.numberMutable, mp.strandMut,
-						initEw, prunedRotAtRes, doMinimize, useFlags, minimizeBB,typeDep,localUseMinDEEPruningEw,Ival);			
+						initEw, prunedRotAtRes, doMinimize, useFlags, minimizeBB,typeDep,localUseMinDEEPruningEw,Ival);
 				System.out.println();
 				
 				if ((algOption>=3)){ //simple Goldstein pairs
@@ -3177,9 +3564,11 @@ public class KSParser
 						if ((useFlags)||(algOption>=3)) //pairs pruning is performed
 							numTotalPrunedPairs = countPrunedPairs(rs.getSplitFlags());
 						
-						if ((numTotalPrunedRot==numPrunedRot)&&(numTotalPrunedPairs==numPrunedPairs)) //no more rotamers/pairs pruned
+						if ((numTotalPrunedRot==numPrunedRot)&&(numTotalPrunedPairs==numPrunedPairs)){ //no more rotamers/pairs pruned
 							done = true;
-						else { //new rotamers pruned this run
+                                                }
+                                                
+						if(!done) { //new rotamers pruned this run
 							numPrunedRotThisRun += numTotalPrunedRot - numPrunedRot;
 							numPrunedPairsThisRun += numTotalPrunedPairs - numPrunedPairs;
 							
@@ -3205,6 +3594,12 @@ public class KSParser
                             return;
                         }
 
+
+                        if(es.useEPIC)
+                            loadCETMatrix(sParams,rs,curStrForMatrix,Ival,false);
+
+                        
+                        
 			if (!doDACS){ //DACS will not be performed
 				
 				if (genInteractionGraph) //generate interaction graph
@@ -3223,7 +3618,20 @@ public class KSParser
 	  				//  useTopKHeuristic: Only the top Kvalue conformations are enumerated.  If 
 	  				//     not enough, a new initEw is returned. Note that we may have to do this 
 	  				//     several times.
-	  				  				
+	  				  			
+                                        if(es.useEPIC){
+                                            System.out.println("Starting lowestBound calculation for EPIC");
+                                            rs.es.gettingLowestBound = true;
+                                            //run A* without polynomial fits to get the lowestBound
+                                            //this is to ensure that our Ival is going to be sufficient
+                                            rs.doAStarGMEC(outputConfInfo,true,doMinimize,
+							mp.numberMutable,mp.strandMut,mp.strandDefault,numMaxMut,initEw,
+							bestScore,null,approxMinGMEC,lambda,minimizeBB,useEref,eRef,doBackrubs,backrubFile,
+							localUseMinDEEPruningEw, Ival);
+                                            
+                                            rs.es.gettingLowestBound = false;
+                                        }
+                                        
 	  				interval = rs.doAStarGMEC(outputConfInfo,true,doMinimize,
 							mp.numberMutable,mp.strandMut,mp.strandDefault,numMaxMut,initEw,
 							bestScore,null,approxMinGMEC,lambda,minimizeBB,useEref,eRef,doBackrubs,backrubFile,
@@ -3231,10 +3639,26 @@ public class KSParser
 	  				
 	  				difference = interval - Ival;
 	  				Ival = interval;
-	  				
+                                        
+                                        if(difference > 0.001 && useMinDEEPruningEw && doMinimize){//we're going to need a repeat run
+                                            System.out.println("Raising Ival to "+Ival);
+                                        
+                                            if(es.useEPIC){
+                                                if(Ival+initEw>es.EPICThresh2){//need to raise EPICThresh2 for repeat run
+                                                    //this way it will always stay at least Ival+initEw, so we can trust enumerations
+                                                    //by doAStarGMECHelper
+                                                    System.out.println("Raising EPICThresh2 to "+(Ival+initEw));
+                                                    es.EPICThresh2 = Ival+initEw;
+                                                }
+                                            }
+                                        }
 				}
 			}
-			else { //DACS			
+			else { //DACS		
+                            
+                                if(es.useEPIC)
+                                    System.out.println("Warning: EPIC not supported for DACS.  Running w/o EPIC");
+                            
 				numRotForRes = compNumRotForRes(mp.numberMutable, rs, mp.strandMut, mp.mutRes2Strand,mp.mutRes2StrandMutIndex);
 				BigInteger numInitUnprunedConfs = compNumUnprunedConfs(mp.numberMutable, prunedRotAtRes, numRotForRes);			
 				
@@ -3470,12 +3894,12 @@ public class KSParser
 	 */
 	private void doDACS(int numMutable, RotamerSearch rs, int strandMut[][],
 			String strandDefault[][], String rotFile,
-			PrunedRotamers<Boolean> prunedRotAtRes, int algOption, String sfFile, boolean useFlags, float initEw, float pruningE,
+			PrunedRotamers<Boolean> prunedRotAtRes, int algOption, String sfFile, boolean useFlags, double initEw, double pruningE,
 			int initDepth, int curDepth, PrintStream logPS, int majorSplitPos[], BigInteger numInitUnprunedConfs,
 			int diffFact, String outputConfInfo, double minRatioDiff, boolean doMinimize, String minPEM, 
 			String maxPEM, boolean distrDEE, ParamSet sParams, 
-			boolean approxMinGMEC, float lambda, Index3 partIndex[], CommucObj cObj, 
-			boolean minimizeBB, int numMaxMut, boolean scaleInt, float maxIntScale, boolean useEref, float eRef[][], 
+			boolean approxMinGMEC, double lambda, Index3 partIndex[], CommucObj cObj, 
+			boolean minimizeBB, int numMaxMut, boolean scaleInt, double maxIntScale, boolean useEref, double eRef[][], 
 			boolean doBackrubs, String backrubFile, int subDepth,int mutRes2Strand[],int mutRes2StrandMutIndex[],boolean typeDep, boolean addWTRot){
 		
 		if (curDepth>=(initDepth+subDepth))
@@ -3514,7 +3938,7 @@ public class KSParser
 		BigInteger numEvaluatedConfs = new BigInteger("0");
 		
 		//update the best energy found
-		pruningE = (float)Math.min(pruningE, rs.getBestE());
+		pruningE = (double)Math.min(pruningE, rs.getBestE());
 		double bestScore = pruningE;
 		
 		boolean savedSpFlags[][][][][][] = null;
@@ -3586,7 +4010,7 @@ public class KSParser
 						System.out.println("Starting pruning with DEE (simple Goldstein)");		
 						prunedForPartition[i] = rs.DoDEEGoldstein(numMutable, strandMut,
 								initEw, prunedForPartition[i], doMinimize, useFlags, 
-								minimizeBB, typeDep, false, 0.0f);			
+								minimizeBB, typeDep, false, 0.0f);
 						System.out.println();
 						
 						if ((algOption>=3)){ //simple Goldstein pairs
@@ -3780,7 +4204,7 @@ public class KSParser
 							backrubFile, false, 0.0f);
 					
 					numEvaluatedConfs = numEvaluatedConfs.add(rs.numConfsEvaluated); //add the evaluated confs for this partition
-					pruningE = (float)Math.min(pruningE,rs.getBestE());//update cutoff energy for MinBounds
+					pruningE = Math.min(pruningE,rs.getBestE());//update cutoff energy for MinBounds
 				}
 				
 				//unprune the artificially pruned indices
@@ -4039,12 +4463,12 @@ public class KSParser
 	*/
 	private void doDistrDACSMaster(String runName, int numMutable, RotamerSearch rs, int strandMut[][],
 			String strandDefault[][], String rotFile,
-			PrunedRotamers<Boolean> prunedRotAtRes, int algOption, String sfFile, boolean useFlags, float initEw, float pruningE,
+			PrunedRotamers<Boolean> prunedRotAtRes, int algOption, String sfFile, boolean useFlags, double initEw, double pruningE,
 			int initDepth, int majorSplitPos[], BigInteger numInitUnprunedConfs,
 			int diffFact, String outputPruneInfo, String outputConfInfo, double minRatioDiff, boolean doMinimize, String minPEM, 
 			String maxPEM, ParamSet sParams, 
-			boolean approxMinGMEC, float lambda, int numRotForRes[], OneMutation resumeResults[], String resumeFileName, boolean minimizeBB, int numMaxMut,
-			boolean scaleInt, float maxIntScale, boolean useEref, float eRef[][], boolean doBackrubs, String backrubFile, int subDepth,
+			boolean approxMinGMEC, double lambda, int numRotForRes[], OneMutation resumeResults[], String resumeFileName, boolean minimizeBB, int numMaxMut,
+			boolean scaleInt, double maxIntScale, boolean useEref, double eRef[][], boolean doBackrubs, String backrubFile, int subDepth,
 			int mutRes2Strand[],int mutRes2StrandMutIndex[],
 			boolean [] strandPresent, String[][] strandLimits, int strandsPresent, boolean addWTRot){
 		
@@ -4096,7 +4520,7 @@ public class KSParser
 			
 			//update the best energy so far
 			for (int j=0; j<resumeResults.length; j++){
-				pruningE = (float)Math.min(pruningE, resumeResults[j].score.doubleValue());
+				pruningE = (double)Math.min(pruningE, resumeResults[j].score.doubleValue());
 			}
 		}
 		
@@ -4210,7 +4634,7 @@ public class KSParser
 			return null;
 		}
 		
-		float otherBestE = cObj.pruningE; //the best energy from other partitions
+		double otherBestE = cObj.pruningE; //the best energy from other partitions
 		
 		Thread t = new Thread(new DACSthread(rs,cObj,logPS,outputConfInfo)); //create a new thread for performing the DACS search
 		t.start();
@@ -4219,7 +4643,7 @@ public class KSParser
 			
 			try{ t.join(waitTime);} catch (Exception e){} //wait for waitTime before the next interruption of the DACS search		
 			
-			float rsBestE = rs.getBestE(); //the best energy from the current partition
+			double rsBestE = rs.getBestE(); //the best energy from the current partition
 			
 			//System.out.println("partition "+cObj.partIndex+": curBestE "+bestE+" rsBestE "+rsBestE);
 			
@@ -4240,7 +4664,7 @@ public class KSParser
 			try {				
 				//System.out.println("partition "+cObj.partIndex+": checking for update from main node..");
 				
-				float c[] = new float[1];
+				double c[] = new double[1];
 				while (MPItoThread.Iprobe(0, updateTag)!=null) { //new update message received
 					
 					//System.out.println("partition "+cObj.partIndex+": update from main node received..");
@@ -4321,7 +4745,7 @@ public class KSParser
 	//The sorted array is returned in mutArray[]
 	private void sortDACSpartitions(OneMutation mutArray[], int initDepth, int majorSplitPos[], int numPartitions[], 
 			PrunedRotamers<Boolean> prunedRotAtRes, Index3 indexMap[][], int numMutable, int strandMut[][],
-			float pruningE, float initEw, RotamerSearch rsP) {
+			double pruningE, double initEw, RotamerSearch rsP) {
 		
 		RotamerSearch rs = rsP; //no changes should be made to the original RotamerSearch object
 		rsP = null;
@@ -4382,10 +4806,10 @@ public class KSParser
 	//Handles the distribution of the DEE computation to the slave nodes
 	private void doDistrDEEMaster(int numMutable, int strandMut[][],
 			ParamSet sParams, String strandDefault[][],
-			String minPEM, String maxPEM, float initEw, PrunedRotamers<Boolean> prunedRotAtRes,
+			String minPEM, String maxPEM, double initEw, PrunedRotamers<Boolean> prunedRotAtRes,
 			boolean doMinimize, RotamerSearch rs, String sfFile, String rotFile, boolean useSF, 
-			int numSpPos, int typeDEE, boolean minimizeBB, boolean scaleInt, float maxIntScale, 
-			boolean useEref, float eRef[][], boolean addWTRot){
+			int numSpPos, int typeDEE, boolean minimizeBB, boolean scaleInt, double maxIntScale, 
+			boolean useEref, double eRef[][], boolean addWTRot){
 		
 		//the total number of residues (active site + ligand, if present)
 		int totalNumRes = numMutable;
@@ -4490,7 +4914,7 @@ public class KSParser
 		RotamerSearch rs = new RotamerSearch(m,cObj.mutableSpots,cObj.strandsPresent, hElect, hVDW, hSteric, true,
 					true, cObj.epsilon, cObj.stericThresh, cObj.softStericThresh, cObj.distDepDielect, 
                                         cObj.dielectConst, cObj.doDihedE, cObj.doSolvationE, cObj.solvScale, cObj.vdwMult, grl,
-                                        cObj.doPerturbations, cObj.pertFile, cObj.minimizePerts, false, false);
+                                        cObj.doPerturbations, cObj.pertFile, cObj.minimizePerts, false, false, new EPICSettings());
 		
 		System.out.print("Loading precomputed energy matrix...");
 
@@ -4577,11 +5001,11 @@ public class KSParser
 //	End of Distributed DEE section
 ///////////////////////////////////////////////////////////////////////////
 	
-	private Object readObject(String inFile){
+	static Object readObject(String inFile){
 		return readObject(inFile,true);
 	}
 	
-	private Object readObject(String inFile, boolean repeat){
+	static Object readObject(String inFile, boolean repeat){
 		Object inObj = null;
 		boolean done = false;
 		while (!done){
@@ -4779,7 +5203,7 @@ public class KSParser
 			
 			if (distrDACS){ //DACS computation, so check if the new energy is better than the best energy so far
 				
-				float curBestE = mutMan.getPruningE();
+				double curBestE = mutMan.getPruningE();
 				
 				if (cObj[0].pruningE<curBestE){ //the new energy is better
 					
@@ -4788,7 +5212,7 @@ public class KSParser
 					mutMan.setBestScore(new BigDecimal(cObj[0].pruningE));
 					mutMan.setPruningE(cObj[0].pruningE);
 					
-					float c[] = new float[1];
+					double c[] = new double[1];
 					c[0] = cObj[0].pruningE;
 					for (int curProc=1; curProc<numProc; curProc++){ //update the best energy in each partition
 						MPItoThread.Isend(c, 0, 1, ThreadMessage.FLOAT, curProc, updateTag);
@@ -4816,7 +5240,31 @@ public class KSParser
 			}
 		}
 	}
-	
+
+
+
+        //Do the work of handleDoMPIMaster on the master node
+        //the MPI is not set up to let a slave have its own slaves,
+        //so this is for if a slave needs to run handleDoMPIMaster (e.g. has to compute an energy matrix)
+        public void handleMasterLocally(MutationManager mutMan, int size) {
+                
+                if(mutMan.getDistrDACS()){
+                    System.err.println("ERROR: distrDACS not supported for handleMasterLocally");
+                    new Exception().printStackTrace();
+                    System.exit(1);
+                }
+
+                System.out.println("Performing slave calculations locally...");
+                for(int curMut=0; curMut<size; curMut++){
+                    CommucObj cObj = mutMan.getNextComObj(curMut);
+                    cObj = handleKSSlave(cObj);
+                    mutMan.processFinishedMutation(cObj);
+                    System.out.println("Finished: "+cObj.mutationNumber+", Time: "+(cObj.elapsedTime/60.0));
+                }
+	}
+
+
+
 	//Do MPI for a slave node
 	public void handleDoMPISlave() throws MPIException, InterruptedException {
 		
@@ -4843,7 +5291,7 @@ public class KSParser
 					MPItoThread.Send(cObj, 0, 1, ThreadMessage.OBJECT, 0, regTag); //send back result
 				}
 				else { //(s.tag==updateTag), so discard
-					float c[] = new float[1];
+					double c[] = new double[1];
 					MPItoThread.Recv(c, 0, 1, ThreadMessage.FLOAT, 0, updateTag);
 				}
 			}
@@ -4872,8 +5320,8 @@ public class KSParser
 		int numInAS = (new Integer((String)sParams.getValue("NUMINAS"))).intValue();	
 		String runName = ((String)sParams.getValue("RUNNAME"));
 		boolean sysSampling = (new Boolean((String)sParams.getValue("SYSSAMPLING"))).booleanValue();
-		double theta = (new Float((String)sParams.getValue("THETA"))).floatValue();
-		double alpha = (new Float((String)sParams.getValue("ALPHA"))).floatValue();
+		double theta = (new Double((String)sParams.getValue("THETA"))).doubleValue();
+		double alpha = (new Double((String)sParams.getValue("ALPHA"))).doubleValue();
 		int numSamples = (new Integer((String)sParams.getValue("NUMSAMPLES"))).intValue();
 		boolean ligPresent = (new Boolean((String)sParams.getValue("LIGPRESENT"))).booleanValue();
 		String ligType = null;
@@ -4897,7 +5345,7 @@ public class KSParser
 		
 		RotamerSearch rs = new RotamerSearch(mp.m,numberMutable,strandsPresent, hElect, hVDW, hSteric, true,
 					true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst, doDihedE, 
-                                        doSolvationE, solvScale, softvdwMultiplier, grl, false, null, false, false, false);
+                                        doSolvationE, solvScale, softvdwMultiplier, grl, false, null, false, false, false, new EPICSettings());
 		
 		rs.doGenBackbones(runName, numberMutable, strandMut, theta, alpha, numSamples, sysSampling);
 	}
@@ -5062,7 +5510,7 @@ public class KSParser
 		RotamerSearch rs = new RotamerSearch(m,numberMutable,strandsPresent, hElect, hVDW, hSteric, true,
 					true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst,
                                         doDihedE, doSolvationE, solvScale, softvdwMultiplier, grl,
-                                        false, null, false, false, false);
+                                        false, null, false, false, false, new EPICSettings());
 
 		
 		
@@ -5154,7 +5602,7 @@ public class KSParser
 		
 		//Compute the corresponding matrix entries
  		rs.simplePairwiseMutationAllRotamerSearch(strandMut,numberMutable,true,shellRun,intraRun,
-				resMut,minEmatrix,maxEmatrix,minimizeBB,doBackrubs,templateOnly,backrubFile, templateAlwaysOn);
+				resMut,minEmatrix,maxEmatrix,minimizeBB,doBackrubs,templateOnly,backrubFile, templateAlwaysOn,strandDefault, false);
 		
 		return;
 	}
@@ -5245,10 +5693,10 @@ public class KSParser
 		
 		String matrixName = (String)sParams.getValue("MATRIXNAME");
 		boolean useEref = (new Boolean((String)sParams.getValue("USEEREF", "true"))).booleanValue();
-		float dist = (new Float((String)sParams.getValue("DIST", "8.0"))).floatValue();
+		double dist = (new Double((String)sParams.getValue("DIST", "8.0"))).doubleValue();
 		String rotProbFile = (String)sParams.getValue("ROTPROBFILE", runName+"rotProb");
-		float stericE = (new Float((String)sParams.getValue("STERICE", "30"))).floatValue();
-		float maxPairE = (new Float((String)sParams.getValue("MAXPAIRE","1000.0"))).floatValue();
+		double stericE = (new Double((String)sParams.getValue("STERICE", "30"))).doubleValue();
+		double maxPairE = (new Double((String)sParams.getValue("MAXPAIRE","1000.0"))).doubleValue();
 				
 		MolParameters mp = new MolParameters();
 		loadStrandParams(sParams, mp, COMPLEX);
@@ -5297,14 +5745,14 @@ public class KSParser
 		
 		
 		rotProbFile = (rotProbFile+".dat");
-		float rotProb[][] = (float [][])readObject(rotProbFile,false);
+		double rotProb[][] = (double [][])readObject(rotProbFile,false);
 		if (rotProb==null){ //Perform SCMF to compute the rotamer probabilities		
 			
 			//read in or compute all of the energy matrices;
 			//NOTE: backbone-to-backbone and rotamer-to-backbone energies are included in the pairwise rotamer energies
-			float asasE[][][][] = getResEntropyEmatricesPair(matrixName, sParams, numRes, strandDefault, mp, runName, dist);
-			float intraEnergies[][] = getResEntropyEmatricesIntra(matrixName, sParams, numRes, mp, runName);
-			float eRef[] = getResEntropyEmatricesEref(useEref, null, null, null, intraEnergies, numRes,null,null,rotLib);
+			double asasE[][][][] = getResEntropyEmatricesPair(matrixName, sParams, numRes, strandDefault, mp, runName, dist);
+			double intraEnergies[][] = getResEntropyEmatricesIntra(matrixName, sParams, numRes, mp, runName);
+			double eRef[] = getResEntropyEmatricesEref(useEref, null, null, null, intraEnergies, numRes,null,null,rotLib);
 			
 			rotProb = compRotProbSCMF(numRes, intraEnergies, asasE, eRef, rotProbFile, strandDefault, stericE, maxPairE,m,rotLib);
 		}
@@ -5342,7 +5790,7 @@ public class KSParser
 			int strResNum=m.residue[i].strandResidueNumber;
 			if ( !strandDefault[m.residue[i].strandNumber][m.residue[i].strandResidueNumber].equalsIgnoreCase("PRO") ){
 			
-				float aaProbBBE[] = new float[rotLib.getAAtypesAllowed().length];
+				double aaProbBBE[] = new double[rotLib.getAAtypesAllowed().length];
 				int curInd = 0;
 				for (int j=0; j<aaProbBBE.length; j++){
 					
@@ -5402,16 +5850,16 @@ public class KSParser
 	}
 	
 	//Computes the rotamer probabilities for all rotamers at all residue positions using SCMF
-	private float[][] compRotProbSCMF(int numRes, float intraEnergies[][],
-			float asasE[][][][], float eRef[], String rotProbFile, String strandDefault[][], float stericE, float maxPairE,Molecule m,
+	private double[][] compRotProbSCMF(int numRes, double intraEnergies[][],
+			double asasE[][][][], double eRef[], String rotProbFile, String strandDefault[][], double stericE, double maxPairE,Molecule m,
 			RotamerLibrary rotLib){
 		
-		final float constR = (float)(1.9891/1000.0);//the gas constant
-		float T = 50000; //initial temperature
-		final float endT = 298.15f; //the minimum temperature for annealing
-		float tStepSize = 100.0f; //the temperature step size for annealing
-		final float eps = 0.0001f; //the convergence threshold
-		final float lambda = 0.5f; //scaling factor for updating the rotamer probabilities
+		final double constR = (double)(1.9891/1000.0);//the gas constant
+		double T = 50000; //initial temperature
+		final double endT = 298.15f; //the minimum temperature for annealing
+		double tStepSize = 100.0f; //the temperature step size for annealing
+		final double eps = 0.0001f; //the convergence threshold
+		final double lambda = 0.5f; //scaling factor for updating the rotamer probabilities
 		
 		int totalNumRotamers = rotLib.getTotalNumRotamers();
 		
@@ -5448,9 +5896,9 @@ public class KSParser
 		
 		
 		//For each residue, compute the probability of each rotamer for that residue
-		float Emf[][] = new float[numRes][totalNumRotamers];
-		float rotProb[][] = new float[numRes][totalNumRotamers];
-		float oldProb[][] = new float[numRes][totalNumRotamers];
+		double Emf[][] = new double[numRes][totalNumRotamers];
+		double rotProb[][] = new double[numRes][totalNumRotamers];
+		double oldProb[][] = new double[numRes][totalNumRotamers];
 		for (int i=0; i<numRes; i++){
 			for (int j=0; j<totalNumRotamers; j++) {
 				if (!prunedRot[i][j])
@@ -5509,11 +5957,11 @@ public class KSParser
 					
 					if ( !strandDefault[m.residue[i].strandNumber][m.residue[i].strandResidueNumber].equalsIgnoreCase("PRO") ){
 					
-						float normFactor = 0.0f;
+						double normFactor = 0.0f;
 						for (int j=0; j<totalNumRotamers; j++){
 							
 							if (!prunedRot[i][j])
-								normFactor += (float)Math.exp( -Emf[i][j] / (constR*T));	
+								normFactor += (double)Math.exp( -Emf[i][j] / (constR*T));	
 						}
 						
 						for (int j=0; j<totalNumRotamers; j++){
@@ -5523,7 +5971,7 @@ public class KSParser
 								oldProb[i][j] = rotProb[i][j]; //the probability before the update
 								
 								if (normFactor!=0.0f)
-									rotProb[i][j] = lambda*((float)Math.exp( -Emf[i][j] / (constR*T)) / normFactor) + (1-lambda)*oldProb[i][j];
+									rotProb[i][j] = lambda*((double)Math.exp( -Emf[i][j] / (constR*T)) / normFactor) + (1-lambda)*oldProb[i][j];
 								else
 									rotProb[i][j] = 0.0f;
 							}
@@ -5531,7 +5979,7 @@ public class KSParser
 					}
 				}
 				
-				float rms = checkRotProbConvEntropy(rotProb,oldProb,strandDefault,prunedRot,m);
+				double rms = checkRotProbConvEntropy(rotProb,oldProb,strandDefault,prunedRot,m);
 				
 				if (rms>eps)
 					done = false;
@@ -5548,18 +5996,18 @@ public class KSParser
 	}
 	
 	//Checks if the rotamer probabilities for the entropy computation have converged
-	private float checkRotProbConvEntropy(float rotProb[][], float oldProb[][], String strandDefault[][], boolean prunedRot[][],Molecule m){
+	private double checkRotProbConvEntropy(double rotProb[][], double oldProb[][], String strandDefault[][], boolean prunedRot[][],Molecule m){
 		
-		float sum = 0.0f;
+		double sum = 0.0f;
 		for (int i=0; i<rotProb.length; i++){
 			if ( !strandDefault[m.residue[i].strandNumber][m.residue[i].strandResidueNumber].equalsIgnoreCase("PRO") ){
 				for (int j=0; j<rotProb[i].length; j++){
 					if (!prunedRot[i][j])
-						sum += (float)Math.pow( (rotProb[i][j]-oldProb[i][j]) , 2.0);
+						sum += (double)Math.pow( (rotProb[i][j]-oldProb[i][j]) , 2.0);
 				}
 			}
 		}
-		float rms = (float)Math.sqrt(sum);
+		double rms = (double)Math.sqrt(sum);
 		
 		System.out.println("RMS: "+rms);
 		
@@ -5569,15 +6017,15 @@ public class KSParser
 	//Reads in (if computed) or computes the energy matrices for rot-to-rot pairwise energies;
 	//This is not setup to handle energy minimization properly (mainly due to the approach used for computing only a small
 	//		subset of the pairwise rot-to-rot energies), so doMinimize and minimizeBB should be false
-	private float [][][][] getResEntropyEmatricesPair(String matrixName, ParamSet sParams, int numRes, String strandDefault[][], MolParameters mp,
-			String runName, float dist){
+	private double [][][][] getResEntropyEmatricesPair(String matrixName, ParamSet sParams, int numRes, String strandDefault[][], MolParameters mp,
+			String runName, double dist){
 		
 		String origPDB = (String)sParams.getValue("PDBNAME");
 		
 		//Check for the pairwise rot-to-rot file;
 		String pairName = matrixName+"_pair.dat";
 		
-		float asasE[][][][] = readPairMatrixEntropy(pairName,numRes);
+		double asasE[][][][] = readPairMatrixEntropy(pairName,numRes);
 		if (asasE==null){ //compute the rot-to-template energy matrix
 			
 			//For each residue position i, get all residue positions that are within dist
@@ -5590,7 +6038,7 @@ public class KSParser
 			}
 			
 			int numPairs = 0;
-			asasE = new float[numRes][numRes][][];
+			asasE = new double[numRes][numRes][][];
 			
 			for (int i=0; i<numRes; i++){
 					
@@ -5598,7 +6046,7 @@ public class KSParser
 					for (int j=i+1; j<numRes; j++){
 						if (!strandDefault[mp.m.residue[j].strandNumber][mp.m.residue[j].strandResidueNumber].equalsIgnoreCase("PRO")){
 							if (as[i][j]){
-								asasE[i][j] = new float[1][];
+								asasE[i][j] = new double[1][];
 								numPairs++;
 							}
 						}
@@ -5622,7 +6070,7 @@ public class KSParser
 	//Reads in (if computed) or computes the energy matrices for intra-rot energies;
 	//This is not setup to handle energy minimization properly (mainly due to the approach used for computing only a small
 	//		subset of the pairwise rot-to-rot energies), so doMinimize and minimizeBB should be false
-	private float [][] getResEntropyEmatricesIntra(String matrixName, ParamSet sParams, int numRes, MolParameters mp, String runName){
+	private double [][] getResEntropyEmatricesIntra(String matrixName, ParamSet sParams, int numRes, MolParameters mp, String runName){
 		
 		String origPDB = (String)sParams.getValue("PDBNAME");
 		
@@ -5630,7 +6078,7 @@ public class KSParser
 		//Check for the intra energies file
 		String intraName = matrixName+"_intra.dat";
 		
-		float intraEnergies[][] = (float [][])readObject(intraName,false); //check if already computed			
+		double intraEnergies[][] = (double [][])readObject(intraName,false); //check if already computed			
 		
 		if (intraEnergies==null) //compute the intra-rotamer energy matrix
 			computeEntropyEmatrixMaster(numRes,runName+".log",intraName,sParams,false,false,false,null,
@@ -5642,13 +6090,13 @@ public class KSParser
 		/*if (ligStrNum>=0) //the ligand is not used here
 			m.deleteStrand(ligStrNum);*/
 		
-		intraEnergies = (float [][])readObject(intraName,false);
+		intraEnergies = (double [][])readObject(intraName,false);
 		
 		return intraEnergies;
 	}
 	
 	//Reads in the amino acid reference energies (if used);
-	private float [] getResEntropyEmatricesEref(boolean useEref, float intraEnergies[][][][][][], StrandRotamers strandRot[], int strandMut[][], float intraEnergiesEntropy[][], int numRes, 
+	private double [] getResEntropyEmatricesEref(boolean useEref, double intraEnergies[][][][][][], StrandRotamers strandRot[], int strandMut[][], double intraEnergiesEntropy[][], int numRes, 
 			int mutRes2Strand[],int mutRes2StrandMutIndex[], RotamerLibrary rotLib){
 		
 		if ( (intraEnergies==null && intraEnergiesEntropy==null) || (intraEnergies!=null && intraEnergiesEntropy!=null) ){ //exactly one of the two matrices should be non-null
@@ -5656,7 +6104,7 @@ public class KSParser
 			System.exit(1);
 		}
 		
-		float eRef[] = new float[rotLib.getAAtypesAllowed().length];
+		double eRef[] = new double[rotLib.getAAtypesAllowed().length];
 		
 		if (useEref){ //use AA reference energies		
 			eRef = compEref(intraEnergies,strandRot,strandMut,intraEnergiesEntropy,numRes,mutRes2Strand, mutRes2StrandMutIndex,rotLib);
@@ -5671,7 +6119,7 @@ public class KSParser
 	}
 	
 	//Reads in the pairwise energy matrix for the entropy computation
-	private float [][][][] readPairMatrixEntropy(String fName, int numRes){
+	private double [][][][] readPairMatrixEntropy(String fName, int numRes){
 		
 		BufferedReader bufread = null;
 		try {
@@ -5683,7 +6131,7 @@ public class KSParser
 			return null;
 		}
 		
-		float asasE[][][][] = new float[numRes][][][];
+		double asasE[][][][] = new double[numRes][][][];
 
 		boolean done = false;
 		String str = null;
@@ -5704,7 +6152,7 @@ public class KSParser
 			else {				
 				int i = new Integer(getToken(str,1)).intValue();
 				String name = getToken(str,2);
-				asasE[i] = (float [][][])readObject(name,false);
+				asasE[i] = (double [][][])readObject(name,false);
 				if (asasE[i]==null){
 					System.out.println("ERROR: Could not read data from file "+name);
 					System.exit(1);
@@ -5724,7 +6172,7 @@ public class KSParser
 	
 	//Determines how many residue positions in the molecule numbered from (pos+1...) (pos is strand-relative numbering)
 	//		are within dist from residue position pos
-	public boolean [] getProxAS(Molecule m, int pos, float dist, boolean as[]){
+	public boolean [] getProxAS(Molecule m, int pos, double dist, boolean as[]){
 		
 		int strandMap[] = new int[2];
 		strandMap[0] = pos;
@@ -5822,7 +6270,7 @@ public class KSParser
 	
 	//Distributes the different types of energy computation for the entropy calculation
 	private void computeEntropyEmatrixMaster(int numRes, String runName, String matrixName, ParamSet sParams, boolean doMinimize, boolean minimizeBB, boolean doBackrubs, String backrubFile,
-			float bbEnergies[][], float asasE[][][][], boolean compASASdist, float dist, boolean asDist[][], boolean intraRun, MolParameters mp){
+			double bbEnergies[][], double asasE[][][][], boolean compASASdist, double dist, boolean asDist[][], boolean intraRun, MolParameters mp){
 		
 		//MolParameters mp = loadMolecule(sParams, COMPLEX);
 		//KER: This function assumes using the protein rotamer library
@@ -5849,7 +6297,7 @@ public class KSParser
 				
 				mutEnerMatrixSize = 1 + rotLib.getTotalNumRotamers()*numMutable;
 				
-				bbEnergies = new float[mutEnerMatrixSize][1];
+				bbEnergies = new double[mutEnerMatrixSize][1];
 				for(int i=0; i<mutEnerMatrixSize; i++) {
 					for(int j=0; j<1; j++){
 						bbEnergies[i][j] = 0.0f;
@@ -5894,7 +6342,7 @@ public class KSParser
 							mutArray[curPair].resMut[1] = j;
 							curPair++;
 							
-							asasE[i][j] = new float[rotLib.getTotalNumRotamers()][rotLib.getTotalNumRotamers()];
+							asasE[i][j] = new double[rotLib.getTotalNumRotamers()][rotLib.getTotalNumRotamers()];
 						}
 					}
 				}
@@ -6048,7 +6496,7 @@ public class KSParser
 			RotamerSearch rs = new RotamerSearch(m, cObj.mutableSpots, strandsPresent, hElect, hVDW, hSteric, true,
 						true, cObj.epsilon, cObj.stericThresh, cObj.softStericThresh, cObj.distDepDielect, 
                                                 cObj.dielectConst, cObj.doDihedE,cObj.doSolvationE,cObj.solvScale,cObj.vdwMult, grl,
-                                                false, null, false, false, false);
+                                                false, null, false, false, false, new EPICSettings());
 			
 			for(int j=0; j<cObj.mutableSpots; j++) {
 				for(int q=0;q<rs.strandRot[0].rl.getAAtypesAllowed().length;q++)
@@ -6060,7 +6508,7 @@ public class KSParser
 			PairwiseEnergyMatrix maxEmatrix = minEmatrix.copy();
 			
 			rs.simplePairwiseMutationAllRotamerSearch(strandMut,numMutable,cObj.doMinimization,shellRun,intraRun,
-					resMut,minEmatrix,maxEmatrix,cObj.minimizeBB,cObj.doBackrubs,templateOnly,cObj.backrubFile, false);			
+					resMut,minEmatrix,maxEmatrix,cObj.minimizeBB,cObj.doBackrubs,templateOnly,cObj.backrubFile, false, cObj.strandDefault, false);
 			
 			long stopTime = System.currentTimeMillis();
 			cObj.elapsedTime = Math.round((stopTime - startTime) / 1000.0f);
@@ -6112,13 +6560,13 @@ public class KSParser
 	
 	//Computes the amino acid reference energies using the intra-rotamer energies from intraEnergies or intraEnergiesEntropy;
 	//For each amino acid type, takes the min energy among all rotamers for that amino acid type, for all numRes residues
-	private float [] compEref(float intraEnergies[][][][][][], StrandRotamers strandRot[], int strandMut[][], float intraEnergiesEntropy[][], int numRes,
+	private double [] compEref(double intraEnergies[][][][][][], StrandRotamers strandRot[], int strandMut[][], double intraEnergiesEntropy[][], int numRes,
 			int mutRes2Strand[],int mutRes2StrandMutIndex[], RotamerLibrary rotLib){
 		
 		int numAAallowed = rotLib.getNumAAallowed();
 		
-		float bigE = (float)Math.pow(10,38);
-		float eRef[] = new float[numAAallowed];
+		double bigE = (double)Math.pow(10,38);
+		double eRef[] = new double[numAAallowed];
 		for(int j=0; j<numAAallowed;j++)
 			//for (int i=0; i<eRef[j].length; i++)
 				eRef[j] = bigE;
@@ -6145,7 +6593,7 @@ public class KSParser
 				int numRot = rotLib.getNumRotForAAtype(aaInd);
 				if (numRot==0) //ALA or GLY
 					numRot = 1;
-				float curMin = bigE;
+				double curMin = bigE;
 				for (int k=0; k<numRot; k++){
 					if (intraEnergies!=null)
 						curMin = Math.min(curMin,intraEnergies[i][aaInd][k][i][0][0]);
@@ -6181,7 +6629,7 @@ public class KSParser
 		String runName = (String)sParams.getValue("RUNNAME");
 		int numRes = (new Integer((String)sParams.getValue("NUMRES"))).intValue();
 		int pdbRes[] = new int[numRes];
-		float dist[] = new float[numRes];
+		double dist[] = new double[numRes];
 		boolean ligPresent = (new Boolean((String)sParams.getValue("LIGPRESENT"))).booleanValue();
 		String ligType = null;
 		if (ligPresent)
@@ -6191,7 +6639,7 @@ public class KSParser
 		String distString = ((String)sParams.getValue("DIST"));
 		for (int i=0; i<numRes; i++){
 			pdbRes[i] = new Integer((String)getToken(resString,i+1)).intValue();
-			dist[i] = new Float((String)getToken(distString,i+1)).floatValue();
+			dist[i] = new Double((String)getToken(distString,i+1)).doubleValue();
 		}
 		
 		MolParameters mp = new MolParameters();
@@ -6248,28 +6696,28 @@ public class KSParser
 	//		computes the minimum distance and minimum energy (absolute value) for each residue pair in residueMap[], 
 	//		considering all possible unpruned rotamers for the given residues;
 	//		ligand interactions are also computed if a ligand is present
-	private void genInteractionGraph(int numMutable, RotamerSearch rs, PrunedRotamers<Boolean> prunedRotAtRes, String runName, int strandMut[][], float eInteractionCutoff, float distCutoff, Molecule m, 
-			boolean usePairSt, float pairSt, int mutRes2Strand[],int mutRes2StrandMutIndex[]) {
+	private void genInteractionGraph(int numMutable, RotamerSearch rs, PrunedRotamers<Boolean> prunedRotAtRes, String runName, int strandMut[][], double eInteractionCutoff, double distCutoff, Molecule m, 
+			boolean usePairSt, double pairSt, int mutRes2Strand[],int mutRes2StrandMutIndex[]) {
 		
 		if (eInteractionCutoff<0.0f) //the cutoff should be non-negative, since we are comparing absolute values of energies against it
 			eInteractionCutoff = 0.0f;
 		
-		float dist[][] = new float[numMutable][numMutable];
-		float eInteraction[][] = new float[numMutable][numMutable];		
+		double dist[][] = new double[numMutable][numMutable];
+		double eInteraction[][] = new double[numMutable][numMutable];		
 		for (int i=0; i<numMutable; i++){
 			for (int j=0; j<numMutable; j++){
-				dist[i][j] = (float)Math.pow(10, 38);
+				dist[i][j] = (double)Math.pow(10, 38);
 				eInteraction[i][j] = 0.0f;
 			}
 		}
 		
-		/*float ligDist[] = null;
-		float ligE[] = null;
+		/*double ligDist[] = null;
+		double ligE[] = null;
 		if (ligPresent){
-			ligDist = new float[numInAS];
-			ligE = new float[numInAS];
+			ligDist = new double[numInAS];
+			ligE = new double[numInAS];
 			for (int i=0; i<numInAS; i++){
-				ligDist[i] = (float)Math.pow(10, 38);
+				ligDist[i] = (double)Math.pow(10, 38);
 				ligE[i] = 0.0f;
 			}
 		}*/
@@ -6307,14 +6755,14 @@ public class KSParser
 										
 										if (!prunedRotAtRes.get(j,AAindex2,r2)){
 											
-											float pairE = rs.getMinMatrix().getPairwiseE( i, AAindex1, r1, j, AAindex2, r2 );
+											double pairE = rs.getMinMatrix().getPairwiseE( i, AAindex1, r1, j, AAindex2, r2 );
 
                                                                                         if(rs.doPerturbations)
                                                                                             ((StrandRCs)rs.strandRot[strj]).applyRC( m, strResNumj, r2 );
                                                                                         else
                                                                                             rs.strandRot[strj].applyRotamer(m, strResNumj, r2);
 											
-											float d = m.strand[stri].residue[strResNumi].getDist(m.strand[strj].residue[strResNumj],true);
+											double d = m.strand[stri].residue[strResNumi].getDist(m.strand[strj].residue[strResNumj],true);
 											dist[i][j] = Math.min(dist[i][j],d);
 											dist[j][i] = Math.min(dist[j][i],d);
 											
@@ -6341,10 +6789,10 @@ public class KSParser
 										
 										rs.ligROT.applyRotamer(m, 0, r2);
 										
-										float d = m.strand[sysStrNum].residue[residueMap[i]].getDist(m.strand[ligStrNum].residue[0],true);
+										double d = m.strand[sysStrNum].residue[residueMap[i]].getDist(m.strand[ligStrNum].residue[0],true);
 										ligDist[i] = Math.min(ligDist[i],d);
 										
-										float pairE = rs.getMinMatrix()[numInAS][AAindex2][r2][i][AAindex1][r1];
+										double pairE = rs.getMinMatrix()[numInAS][AAindex2][r2][i][AAindex1][r1];
 										if ( (!usePairSt) || (pairE<=pairSt) )
 											ligE[i] = Math.max(ligE[i],Math.abs(pairE));
 									}
@@ -6484,7 +6932,7 @@ public class KSParser
 		double minMaxOverlap[] = new double[numInAS2];
 		int minMaxOverlapStruct[] = new int[numInAS2];
 		for (int i=0; i<minMaxOverlap.length; i++){
-			minMaxOverlap[i] = (float)Math.pow(10, 10);
+			minMaxOverlap[i] = (double)Math.pow(10, 10);
 			minMaxOverlapStruct[i] = -1;
 		}
 		
@@ -6614,7 +7062,7 @@ public class KSParser
 		ParamSet sParams = new ParamSet();
 		sParams.addParamsFromFile(getToken(s,2)); //read system parameters
 		int numBackrubSamples = new Integer(getToken(s,3)).intValue();
-		float backrubStepSize = new Float(getToken(s,4)).floatValue();
+		double backrubStepSize = new Double(getToken(s,4)).doubleValue();
 		String backrubFile = getToken(s,5);
 		
 		
@@ -6670,7 +7118,7 @@ public class KSParser
 		ParamSet sParams = new ParamSet();
 		sParams.addParamsFromFile(getToken(s,2)); //read system parameters
 		int numBackrubSamples = new Integer(getToken(s,3)).intValue();
-		float backrubStepSize = new Float(getToken(s,4)).floatValue();
+		double backrubStepSize = new Double(getToken(s,4)).doubleValue();
 		String backrubFile = getToken(s,5);
 		
 		Molecule m = new Molecule();
@@ -6795,15 +7243,15 @@ private int[] rotamersRemaining(int numRotForRes[], PrunedRotamers<Boolean> prun
 
 
                     //Parameters for perturbation selection
-                    float min_rmsd = (new Float((String)sParams.getValue("MINRMSD","0"))).floatValue();//Minimum backbone heavy-atom RMSD for perturbation states: used to select perturbations
+                    double min_rmsd = (new Double((String)sParams.getValue("MINRMSD","0"))).doubleValue();//Minimum backbone heavy-atom RMSD for perturbation states: used to select perturbations
                     Shear.setParams( ((String)sParams.getValue("SHEARPARAMS","none")) );//Default shear parameters (for perturbation selection): State 1 min, state 1 max, state 2 min, state 2 max,...
                     Backrub.setParams( ((String)sParams.getValue("BACKRUBPARAMS","none")) );//Default backrub parameters (same format)
-                    RamachandranChecker.denCutoff = (new Float((String)sParams.getValue("RAMACHANDRANCUTOFF","0.02"))).floatValue();//Density cutoff for Ramachandran filter
+                    RamachandranChecker.denCutoff = (new Double((String)sParams.getValue("RAMACHANDRANCUTOFF","0.02"))).doubleValue();//Density cutoff for Ramachandran filter
 
 
                     RotamerSearch rs = new RotamerSearch(mp.m,mp.numberMutable, mp.strandsPresent, hElect, hVDW, hSteric, true,
 					true, 0.0f, stericThresh, softStericThresh, distDepDielect, dielectConst, doDihedE, doSolvationE,
-                                        solvScale, softvdwMultiplier, grl, doPerturbations, pertFile, minimizePerts, false, false);
+                                        solvScale, softvdwMultiplier, grl, doPerturbations, pertFile, minimizePerts, false, false,new EPICSettings());
 
                     rs.initMutRes2Str(mp.strandMut);
 
@@ -6870,7 +7318,7 @@ private int[] rotamersRemaining(int numRotForRes[], PrunedRotamers<Boolean> prun
                 System.exit(1);
             }
 
-            saveMolecule(m, fileOut, Float.NaN);
+            saveMolecule(m, fileOut, Double.NaN);
         }
 
 

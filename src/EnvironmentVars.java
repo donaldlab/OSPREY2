@@ -48,7 +48,8 @@
 //	  authors:
 // 	  initials    name                 organization                email
 //	 ---------   -----------------    ------------------------    ----------------------------
-//     KER        Kyle E. Roberts       Duke University         ker17@duke.edu
+//     KER        Kyle E. Roberts           Duke University                 ker17@duke.edu
+//     MAH        Mark A. Hallen            Duke University                 mah43@duke.edu
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -75,7 +76,7 @@ public class EnvironmentVars {
 	
 	public static RotamerLibrary aaRotLib;
 
-        public static boolean autoFix;//Should structures being read in be autofixed?
+        public static boolean autoFix = true;//Should structures being read in be autofixed?
 	
 	public static String getDataDir() {
 		return dataDir;

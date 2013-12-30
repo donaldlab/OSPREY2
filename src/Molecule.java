@@ -123,8 +123,8 @@ public class Molecule implements Serializable{
 	Residue	residue[] = null;		// Array of residues in this molecule
 	Atom atom[] = null;					// Array of atoms in this molecule
 	Atom origAtom[] = null;				// Array of atoms to store a copy of the molecule atoms
-	float backupCoordinates[] = null;	// Backup of atom coordinates
-	float	actualCoordinates[] = null;		// Local copy of atom coordinates
+	double backupCoordinates[] = null;	// Backup of atom coordinates
+	double	actualCoordinates[] = null;		// Local copy of atom coordinates
 	boolean connectivityValid = false;	// Are the connectivity arrays up to date
 	boolean connectivity12Valid = false;	// Are connected and connected12 up to date
 	int	connected[][] = null;		// 2D array of connected atoms
@@ -146,6 +146,11 @@ public class Molecule implements Serializable{
         Perturbation[] perts = null; //Perturbations that can affect this molecule
         //Listed in order of application (first layer 1, then layer 2...)
 
+        DegreeOfFreedom DOFs[] = null;//Degrees of freedom affecting this molecule.  Ordered by DOFNum
+
+        boolean validBB = true;//Indicates no perturbation messes up the backbone (indicated by Perturbation.validState)
+        boolean validSC = true;//Indicates sidechains are all valid (an uncloseable proline ring, indicated by Residue.validConf, would invalidate this)
+
 	// Generic constructor
 	Molecule(){
 		strand = new Strand[1];
@@ -153,7 +158,7 @@ public class Molecule implements Serializable{
 		residue[0] = new Residue();
 		strand[0] = new Strand(residue[0]);
 		atom = new Atom[1];
-		actualCoordinates = new float[1];
+		actualCoordinates = new double[1];
 		name = "Untitled";
                 perts = new Perturbation[0];
 	}
@@ -658,7 +663,7 @@ public class Molecule implements Serializable{
 		// handle coordinates
 		int newAtomNumberx3 = newAtomNumber * 3;
 		int moleculeAtomInsertPointx3 = moleculeAtomInsertPoint * 3;
-		float largerCoordinateArray[] = new float[newAtomNumberx3];
+		double largerCoordinateArray[] = new double[newAtomNumberx3];
 		System.arraycopy(actualCoordinates, 0, largerCoordinateArray, 0,
 			moleculeAtomInsertPointx3);
 		if (moleculeAtomInsertPoint+numAtoms < newAtomNumber)
@@ -734,7 +739,7 @@ public class Molecule implements Serializable{
 		atom = largerAtomArray;
 
 		// Handle coordinates (and update bond numbers)
-		float largerCoordinateArray[] = new float[ newAtomNumberx3 ];
+		double largerCoordinateArray[] = new double[ newAtomNumberx3 ];
 		System.arraycopy(actualCoordinates, 0, largerCoordinateArray, 0,
 			actualCoordinates.length);
 		actualCoordinates = largerCoordinateArray;
@@ -888,7 +893,7 @@ public class Molecule implements Serializable{
 			strand[i].number -= 1;
 
 		Atom smallerAtomArray[] = new Atom[newAtomNumber];
-		float smallerActualCoordinateArray[] = new float[newAtomNumberx3];
+		double smallerActualCoordinateArray[] = new double[newAtomNumberx3];
 		Residue smallerResidueArray[] = new Residue[newResidueNumber];
 		Strand smallerStrandArray[] = new Strand[numberOfStrands-1];
 
@@ -963,7 +968,7 @@ public class Molecule implements Serializable{
 		int lowAtomIndex = residue[moleculeResidueNumber].atom[0].moleculeAtomNumber;
 		int highAtomIndex = lowAtomIndex + oldResNumAtoms-1;
 		Atom smallerAtomArray[] = new Atom[newAtomNumber];
-		float smallerActualCoordinateArray[] = new float[newAtomNumberx3];
+		double smallerActualCoordinateArray[] = new double[newAtomNumberx3];
 		Residue smallerResidueArray[] = new Residue[newNumberOfResidues];
 
 	    // copy over good atoms and atom info
@@ -1078,7 +1083,7 @@ public class Molecule implements Serializable{
 				moleculeAtomNumber, atom.length-moleculeAtomNumber-1);
 		atom = smallerAtomArray;
 
-		float smallerCoordinateArray[] = new float[newAtomNumberx3];
+		double smallerCoordinateArray[] = new double[newAtomNumberx3];
 		System.arraycopy(actualCoordinates, 0, smallerCoordinateArray, 0,
 			moleculeAtomNumberx3);
 		if (moleculeAtomNumber<newAtomNumber)
@@ -1293,7 +1298,7 @@ public class Molecule implements Serializable{
 
 		// Aligns dihedral on the +x-axis, modifies the angle then rotates it back
 
-		float backupCoords[][] = new float[4][3];
+		double backupCoords[][] = new double[4][3];
 
 		Atom a1 = atom[a1num];
 		Atom a2 = atom[a2num];
@@ -1318,13 +1323,28 @@ public class Molecule implements Serializable{
 		resolveCoordinates(a3num);  // update a3 coords
 		resolveCoordinates(a4num);  // update a4 coords
 
+                /*
 		Atom pseudoAtom2 = new Atom("a2", a2.coord[0] - a3.coord[0],
 			a2.coord[1] - a3.coord[1], a2.coord[2] - a3.coord[2]);
 		double originalTorsion = a4.torsion(a1, a2, a3);
-
-		changeTorsion(a1num, a2num, a3num, a4num, torsion-originalTorsion,atomList,
+                changeTorsion(a1num, a2num, a3num, a4num, torsion-originalTorsion,atomList,
 			numberOfElements, updateAtoms);
+                
+                */
+                
+                //working with sines and cosines is faster
+                
+                double originalTorsionSC[] = a4.torsionSinCos(a1, a2, a3);
+                double sinTorsion = Math.sin(Math.PI*torsion/180);
+                double cosTorsion = Math.cos(Math.PI*torsion/180);
+                double sinDeltaTorsion = sinTorsion*originalTorsionSC[1] - cosTorsion*originalTorsionSC[0];
+                double cosDeltaTorsion = cosTorsion*originalTorsionSC[1] + sinTorsion*originalTorsionSC[0];
 
+                
+                changeTorsion(a1num, a2num, a3num, a4num, sinDeltaTorsion, cosDeltaTorsion,
+                        atomList, numberOfElements, updateAtoms);
+
+                
 		if (!updateAtoms){
 			// restore the 4 atoms coordinates
 			a1.coord[0] = backupCoords[0][0];
@@ -1349,13 +1369,15 @@ public class Molecule implements Serializable{
 	public void changeTorsion(int a1num, int a2num, int a3num, int a4num, double deltaTorsion,
 		int atomList[], int numberOfElements, boolean updateAtoms){
 
+            
 		// Aligns dihedral on the +x-axis, modifies the angle then rotates it back
 		int at2x3 = a2num * 3;
 		int at3x3 = a3num * 3;
 		int at4x3 = a4num * 3;
 		Atom pseudoAtom2 = new Atom("a2", actualCoordinates[at2x3] - actualCoordinates[at3x3],
-																	actualCoordinates[at2x3+1] - actualCoordinates[at3x3+1],
-																	actualCoordinates[at2x3+2] - actualCoordinates[at3x3+2]);
+                        actualCoordinates[at2x3+1] - actualCoordinates[at3x3+1],
+                        actualCoordinates[at2x3+2] - actualCoordinates[at3x3+2]);
+                
 		int numberOfCoordinates = 0;
 		int atomListLength = 0;
 		int atomNumber;
@@ -1369,7 +1391,7 @@ public class Molecule implements Serializable{
 		}
 		int numberOfCoordinatesx3 = numberOfCoordinates * 3;
 		// array of atom numbers to be rotated
-		float temporaryCoordinates[] = new float[numberOfCoordinatesx3];
+		double temporaryCoordinates[] = new double[numberOfCoordinatesx3];
 		// store atom 4 as first entry in array
 		temporaryCoordinates[0] = actualCoordinates[at4x3] - actualCoordinates[at3x3];
 		temporaryCoordinates[1] = actualCoordinates[at4x3+1] - actualCoordinates[at3x3+1];
@@ -1423,6 +1445,95 @@ public class Molecule implements Serializable{
 		if (updateAtoms)
 			resolveCoordinates(a4num);
 	}
+        
+        
+        
+        
+        
+        //version based on sin/cos, for speed (avoiding inverse trig)
+        public void changeTorsion(int a1num, int a2num, int a3num, int a4num, double sinDeltaTorsion,
+                double cosDeltaTorsion, int atomList[], int numberOfElements, boolean updateAtoms){
+
+            
+		// Aligns dihedral on the +x-axis, modifies the angle then rotates it back
+		int at2x3 = a2num * 3;
+		int at3x3 = a3num * 3;
+		int at4x3 = a4num * 3;
+		Atom pseudoAtom2 = new Atom("a2", actualCoordinates[at2x3] - actualCoordinates[at3x3],
+                        actualCoordinates[at2x3+1] - actualCoordinates[at3x3+1],
+                        actualCoordinates[at2x3+2] - actualCoordinates[at3x3+2]);
+                
+		int numberOfCoordinates = 0;
+		int atomListLength = 0;
+		int atomNumber;
+		if (numberOfElements == 0){
+			atomListLength = 0;
+			numberOfCoordinates = 1;
+		}
+		else{
+			atomListLength = numberOfElements;
+			numberOfCoordinates = atomListLength + 1;
+		}
+		int numberOfCoordinatesx3 = numberOfCoordinates * 3;
+		// array of atom numbers to be rotated
+		double temporaryCoordinates[] = new double[numberOfCoordinatesx3];
+		// store atom 4 as first entry in array
+		temporaryCoordinates[0] = actualCoordinates[at4x3] - actualCoordinates[at3x3];
+		temporaryCoordinates[1] = actualCoordinates[at4x3+1] - actualCoordinates[at3x3+1];
+		temporaryCoordinates[2] = actualCoordinates[at4x3+2] - actualCoordinates[at3x3+2];
+		// translate all other atoms by -a3
+		for (int i = 0, ix3, atx3; i<atomListLength; i++){
+			atomNumber = atomList[i];
+			if ((atomNumber == a1num) || (atomNumber == a2num) ||
+				(atomNumber == a3num) || (atomNumber == a4num))
+				continue;
+			atx3 = atomNumber * 3;
+			ix3 = i * 3;
+			temporaryCoordinates[ix3 + 3] = actualCoordinates[atx3] -
+				actualCoordinates[at3x3];
+			temporaryCoordinates[ix3 + 4] = actualCoordinates[atx3 + 1] -
+				actualCoordinates[at3x3+1];
+			temporaryCoordinates[ix3 + 5] = actualCoordinates[atx3 + 2] -
+				actualCoordinates[at3x3+2];
+		}
+		// get angle info from atom2
+		RotMatrix theRotation = new RotMatrix();
+		double a2YAngleSC[] = pseudoAtom2.angleAboutYAxisSC();
+		theRotation.yAxisRotate( -a2YAngleSC[0], a2YAngleSC[1], pseudoAtom2.coord, 1);
+		double a2ZAngleSC[] = pseudoAtom2.angleAboutZAxisSC();
+
+		theRotation.yAxisRotate( -a2YAngleSC[0], a2YAngleSC[1], temporaryCoordinates, numberOfCoordinates);
+		theRotation.zAxisRotate( a2ZAngleSC[0], -a2ZAngleSC[1], temporaryCoordinates, numberOfCoordinates);
+		theRotation.xAxisRotate( sinDeltaTorsion, cosDeltaTorsion, temporaryCoordinates, numberOfCoordinates);
+		theRotation.zAxisRotate( -a2ZAngleSC[0], -a2ZAngleSC[1], temporaryCoordinates, numberOfCoordinates);
+		theRotation.yAxisRotate( a2YAngleSC[0], a2YAngleSC[1], temporaryCoordinates, numberOfCoordinates);
+		theRotation.translate(actualCoordinates[at3x3], actualCoordinates[at3x3+1],
+			actualCoordinates[at3x3+2], temporaryCoordinates, numberOfCoordinates);
+
+		for(int i=0, ix3, atx3; i<atomListLength; i++){
+			atomNumber = atomList[i];
+			if ((atomNumber == a1num) || (atomNumber == a2num) ||
+				(atomNumber == a3num ) || (atomNumber == a4num))
+				continue;
+			atx3 = atomNumber * 3;
+			ix3 = i * 3;
+
+			actualCoordinates[atx3] = temporaryCoordinates[ix3 + 3];
+			actualCoordinates[atx3 + 1] = temporaryCoordinates[ix3 + 4];
+			actualCoordinates[atx3 + 2] = temporaryCoordinates[ix3 + 5];
+			if (updateAtoms)
+				resolveCoordinates(atomNumber);
+		}
+		actualCoordinates[at4x3] = temporaryCoordinates[0];
+		actualCoordinates[at4x3 + 1] = temporaryCoordinates[1];
+		actualCoordinates[at4x3 + 2] = temporaryCoordinates[2];
+		if (updateAtoms)
+			resolveCoordinates(a4num);
+	}
+        
+        
+        
+        
 
 
         //This function measures the dihedral for the atoms with molecule atom numbers satisfied
@@ -1431,7 +1542,7 @@ public class Molecule implements Serializable{
         public double getTorsion(int a1num, int a2num, int a3num, int a4num){
 
 
-		float backupCoords[][] = new float[4][3];
+		double backupCoords[][] = new double[4][3];
 
 		Atom a1 = atom[a1num];
 		Atom a2 = atom[a2num];
@@ -1479,8 +1590,8 @@ public class Molecule implements Serializable{
 	// Returns the geometric center of a molecule *not* center of
 	//  mass although for large molecules they are essentially
 	//  the same
-	public float[] getCenter(){
-		float xCenter = 0.0f, yCenter = 0.0f, zCenter = 0.0f;
+	public double[] getCenter(){
+		double xCenter = 0.0f, yCenter = 0.0f, zCenter = 0.0f;
 		numberOfAtomsx3 = numberOfAtoms * 3;
 		for(int i=0; i<numberOfAtoms; i+=3){
 			xCenter += atom[i].coord[0];
@@ -1490,7 +1601,7 @@ public class Molecule implements Serializable{
 		xCenter /= numberOfAtoms;
 		yCenter /= numberOfAtoms;
 		zCenter /= numberOfAtoms;
-		float[] cent = new float[3];
+		double[] cent = new double[3];
 		cent[0] = xCenter;
 		cent[1] = yCenter;
 		cent[2] = zCenter;
@@ -1498,9 +1609,9 @@ public class Molecule implements Serializable{
 	}
 
 	// Returns the center of mass of the molecule
-	public float[] getCenterOfMass(){
-		float centOfMass[] = new float[3];
-		float xCenter = 0.0f, yCenter = 0.0f, zCenter = 0.0f;
+	public double[] getCenterOfMass(){
+		double centOfMass[] = new double[3];
+		double xCenter = 0.0f, yCenter = 0.0f, zCenter = 0.0f;
 		double totalMass = 0.0;
 		double tmpMass = 0.0;
 
@@ -1583,7 +1694,7 @@ public class Molecule implements Serializable{
 
 		Residue r = residue[resNum];
 
-		float x=0, y=0, z=0;
+		double x=0, y=0, z=0;
 		for(int i=0; i<r.numberOfAtoms; i++){
 			int curAtom = r.atom[i].moleculeAtomNumber;
 			x += actualCoordinates[curAtom*3];
@@ -1600,8 +1711,8 @@ public class Molecule implements Serializable{
 
 	// Translate the specified residue by dx, dy, dz
 	// resNum is molecule relative
-	public void translateResidue(int resNum, float dx, float dy,
-		float dz){
+	public void translateResidue(int resNum, double dx, double dy,
+		double dz){
 		translateResidue(resNum,dx,dy,dz,true);
 	}
 
@@ -1609,15 +1720,15 @@ public class Molecule implements Serializable{
 	// resNum is molecule relative
 	// If updateAtoms is true the actualCoordinates are copied
 	//  back into the atom coordinates
-	public void translateResidue(int resNum, float dx, float dy,
-		float dz, boolean updateAtoms){
+	public void translateResidue(int resNum, double dx, double dy,
+		double dz, boolean updateAtoms){
 		translateResidue(residue[resNum].strandNumber,
 			residue[resNum].strandResidueNumber,dx,dy,dz,updateAtoms);
 	}
 	// Translate the specified residue by dx, dy, dz
 	// resNum is strand relative
-	public void translateResidue(int strNum, int resNum, float dx,
-		float dy, float dz){
+	public void translateResidue(int strNum, int resNum, double dx,
+		double dy, double dz){
 		translateResidue(strNum,resNum,dx,dy,dz,true);
 	}
 
@@ -1625,8 +1736,8 @@ public class Molecule implements Serializable{
 	// resNum is strand relative
 	// If updateAtoms is true the actualCoordinates are copied
 	//  back into the atom coordinates
-	public void translateResidue(int strNum, int resNum, float dx,
-		float dy, float dz, boolean updateAtoms){
+	public void translateResidue(int strNum, int resNum, double dx,
+		double dy, double dz, boolean updateAtoms){
 
 		int index = strand[strNum].residue[resNum].atom[0].moleculeAtomNumber * 3;
 		for(int i=0;i<strand[strNum].residue[resNum].numberOfAtoms;i++){
@@ -1639,30 +1750,30 @@ public class Molecule implements Serializable{
 	}
 
 	// Translate the specified strand by dx, dy, dz
-	public void translateStrand(int strNum, float dx, float dy,
-		float dz){
+	public void translateStrand(int strNum, double dx, double dy,
+		double dz){
 		translateStrand(strNum,dx,dy,dz,true);
 	}
 
 	// Translate the specified strand by dx, dy, dz
 	// If updateAtoms is true the actualCoordinates are copied
 	//  back into the atom coordinates
-	public void translateStrand(int strNum, float dx, float dy,
-		float dz, boolean updateAtoms){
+	public void translateStrand(int strNum, double dx, double dy,
+		double dz, boolean updateAtoms){
 		for(int i=0;i<strand[strNum].numberOfResidues;i++){
 			translateResidue(strNum,i,dx,dy,dz,updateAtoms);
 		}
 	}
 
 	// Translates the molecule by the amount dx, dy, dz
-	public void translateMolecule(float dx, float dy, float dz){
+	public void translateMolecule(double dx, double dy, double dz){
 		translateMolecule(dx,dy,dz,true);
 	}
 
 	// Translates the molecule by the amount dx, dy, dz
 	// If updateAtoms is true the actualCoordinates are copied
 	//  back into the atom coordinates
-	public void translateMolecule(float dx, float dy, float dz, boolean
+	public void translateMolecule(double dx, double dy, double dz, boolean
 		updateAtoms){
 		for(int i=0; i<numberOfAtomsx3; i=i+3){
 			actualCoordinates[i] += dx;
@@ -1674,13 +1785,13 @@ public class Molecule implements Serializable{
 	}
 
 
-	public void rotateStrandAroundCOM(int ligStrNum, float dx, float dy,
-		float dz, float theta){
+	public void rotateStrandAroundCOM(int ligStrNum, double dx, double dy,
+		double dz, double theta){
 		rotateStrandAroundCOM(ligStrNum,dx,dy,dz,theta,true);
 	}
 
-	public void rotateStrandAroundCOM(int ligStrNum, float dx, float dy,
-		float dz, float theta, boolean updateAtoms){
+	public void rotateStrandAroundCOM(int ligStrNum, double dx, double dy,
+		double dz, double theta, boolean updateAtoms){
 
 		double theCOM[] = getStrandCOM(ligStrNum);
 
@@ -1688,20 +1799,28 @@ public class Molecule implements Serializable{
 			theta, updateAtoms);
 	}
 
-	public void rotateStrand(int ligStrNum, float dx, float dy, float dz,
-		double cx, double cy, double cz, float theta){
+	public void rotateStrand(int ligStrNum, double dx, double dy, double dz,
+		double cx, double cy, double cz, double theta){
 
 		rotateStrand(ligStrNum,dx,dy,dz,cx,cy,cz,theta,true);
 	}
 
-	public void rotateStrand(int ligStrNum, float dx, float dy, float dz,
-		double cx, double cy, double cz, float thetaDeg, boolean updateAtoms){
+	public void rotateStrand(int ligStrNum, double dx, double dy, double dz,
+		double cx, double cy, double cz, double thetaDeg, boolean updateAtoms){
 
-		double tx,ty,tz;
+		
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(dx,dy,dz,thetaDeg,rot_mtx);
+                rotateStrand(ligStrNum, rot_mtx, cx, cy, cz, updateAtoms);
+        }
+
+        
+        public void rotateStrand(int ligStrNum, double[][] rot_mtx, double cx,
+                double cy, double cz, boolean updateAtoms){
+
+                double tx,ty,tz;
 
 		Strand theStrand = strand[ligStrNum];
 		int i=theStrand.residue[0].atom[0].moleculeAtomNumber;
@@ -1713,9 +1832,9 @@ public class Molecule implements Serializable{
 				ty=actualCoordinates[baseNum+1] - cy;
 				tz=actualCoordinates[baseNum+2] - cz;
 
-				actualCoordinates[baseNum] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
-				actualCoordinates[baseNum+1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
-				actualCoordinates[baseNum+2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
+				actualCoordinates[baseNum] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
+				actualCoordinates[baseNum+1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
+				actualCoordinates[baseNum+2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
 
 				if (updateAtoms)
 					resolveCoordinates(i);
@@ -1727,12 +1846,12 @@ public class Molecule implements Serializable{
 
 	//Rotates the given residue (molecule-relative numbering) by thetaDeg degrees
 	//		around axis dx, dy, dz (around the point cs,cy,cz)
-	public void rotateResidue(int resNum, float dx, float dy, float dz,
-			double cx, double cy, double cz, float thetaDeg, boolean updateAtoms){
+	public void rotateResidue(int resNum, double dx, double dy, double dz,
+			double cx, double cy, double cz, double thetaDeg, boolean updateAtoms){
 
 		double tx,ty,tz;
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(dx,dy,dz,thetaDeg,rot_mtx);
 
@@ -1745,9 +1864,9 @@ public class Molecule implements Serializable{
 			ty=actualCoordinates[baseNum+1] - cy;
 			tz=actualCoordinates[baseNum+2] - cz;
 
-			actualCoordinates[baseNum] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
-			actualCoordinates[baseNum+1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
-			actualCoordinates[baseNum+2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
+			actualCoordinates[baseNum] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
+			actualCoordinates[baseNum+1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
+			actualCoordinates[baseNum+2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
 
 			if (updateAtoms)
 				resolveCoordinates(i);
@@ -1758,7 +1877,7 @@ public class Molecule implements Serializable{
 
                 ////Rotates the given atomList (molecule-relative numbering) using rotation matrix rot_mtx
 	//		around the point (cx,cy,cz)
-        public void rotateAtomList(int atomList[], float[][] rot_mtx, double cx, double cy, double cz, boolean updateAtoms){
+        public void rotateAtomList(int atomList[], double[][] rot_mtx, double cx, double cy, double cz, boolean updateAtoms){
 
 		double tx,ty,tz;
 
@@ -1770,9 +1889,9 @@ public class Molecule implements Serializable{
 			ty=actualCoordinates[baseNum+1] - cy;
 			tz=actualCoordinates[baseNum+2] - cz;
 
-			actualCoordinates[baseNum] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
-			actualCoordinates[baseNum+1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
-			actualCoordinates[baseNum+2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
+			actualCoordinates[baseNum] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
+			actualCoordinates[baseNum+1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
+			actualCoordinates[baseNum+2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
 
 			if (updateAtoms)
 				resolveCoordinates(atomList[q]);
@@ -1782,9 +1901,9 @@ public class Molecule implements Serializable{
 
                 ////Rotates the given atomList (molecule-relative numbering) using the inverse of the
                 //rotation matrix rot_mtx (implicitly) around the point (cx,cy,cz)
-        public void unRotateAtomList(int atomList[], float[][] rot_mtx, float cx, float cy, float cz, boolean updateAtoms){
+        public void unRotateAtomList(int atomList[], double[][] rot_mtx, double cx, double cy, double cz, boolean updateAtoms){
 
-		float t[] = new float[3];
+		double t[] = new double[3];
                 RotMatrix r = new RotMatrix();
 
 		for(int q=0;q<atomList.length;q++) {
@@ -1795,7 +1914,7 @@ public class Molecule implements Serializable{
 			t[1]=actualCoordinates[baseNum+1] - cy;
 			t[2]=actualCoordinates[baseNum+2] - cz;
 
-                        float newt[] = r.unapplyRotMatrix(rot_mtx, t);
+                        double newt[] = r.unapplyRotMatrix(rot_mtx, t);
 
 			actualCoordinates[baseNum] = newt[0] + cx;
 			actualCoordinates[baseNum+1] = newt[1] + cy;
@@ -1808,7 +1927,7 @@ public class Molecule implements Serializable{
 
         //Translates the atomList (molecule-relative numbering) using translation vector tr_vec
         //If backwards == true then translate by -(tr_vec) instead
-        public void translateAtomList(int atomList[], float[] tr_vec, boolean updateAtoms, boolean backwards){
+        public void translateAtomList(int atomList[], double[] tr_vec, boolean updateAtoms, boolean backwards){
 
             for(int q=0;q<atomList.length;q++){
 
@@ -1832,12 +1951,12 @@ public class Molecule implements Serializable{
 
 	//Rotates the given atomList (molecule-relative numbering) by thetaDeg degrees
 	//		around axis dx, dy, dz (around the point cx,cy,cz)
-	public void rotateAtomList(int atomList[], float dx, float dy, float dz,
-			double cx, double cy, double cz, float thetaDeg, boolean updateAtoms){
+	public void rotateAtomList(int atomList[], double dx, double dy, double dz,
+			double cx, double cy, double cz, double thetaDeg, boolean updateAtoms){
 
 		double tx,ty,tz;
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(dx,dy,dz,thetaDeg,rot_mtx);
 
@@ -1848,13 +1967,13 @@ public class Molecule implements Serializable{
 
 	//Rotates the given atom i (molecule-relative numbering) by thetaDeg degrees
 	//		around axis dx, dy, dz (around the point cs,cy,cz)
-	public void rotateAtom(int i, float dx, float dy, float dz,
-			double cx, double cy, double cz, float thetaDeg, boolean updateAtoms){
+	public void rotateAtom(int i, double dx, double dy, double dz,
+			double cx, double cy, double cz, double thetaDeg, boolean updateAtoms){
 
 		double tx,ty,tz;
 		int baseNum = i*3;
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(dx,dy,dz,thetaDeg,rot_mtx);
 
@@ -1862,9 +1981,9 @@ public class Molecule implements Serializable{
 		ty=actualCoordinates[baseNum+1] - cy;
 		tz=actualCoordinates[baseNum+2] - cz;
 
-		actualCoordinates[baseNum] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
-		actualCoordinates[baseNum+1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
-		actualCoordinates[baseNum+2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
+		actualCoordinates[baseNum] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + cx);
+		actualCoordinates[baseNum+1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + cy);
+		actualCoordinates[baseNum+2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + cz);
 
 		if (updateAtoms)
 			resolveCoordinates(i);
@@ -1877,7 +1996,7 @@ public class Molecule implements Serializable{
 		double thetaDeg) {
 
 		// Get center of mass
-		float[] centOfMass = getCenterOfMass();
+		double[] centOfMass = getCenterOfMass();
 
 		rotateMolecule(dx,dy,dz,thetaDeg,centOfMass[0],centOfMass[1],centOfMass[2]);
 	}
@@ -1886,16 +2005,16 @@ public class Molecule implements Serializable{
 	// This function rotates the entire molecule by thetaDeg
 	//  degrees around axis dx, dy, dz (around the point cx,cy,cz)
 	public void rotateMolecule(double dx, double dy, double dz,
-		double thetaDeg, float cx, float cy, float cz) {
+		double thetaDeg, double cx, double cy, double cz) {
 
-		float fx,fy,fz, tx,ty,tz;
-		fx = (new Double(dx)).floatValue();
-		fy = (new Double(dy)).floatValue();
-		fz = (new Double(dz)).floatValue();
+		double fx,fy,fz, tx,ty,tz;
+		fx = (new Double(dx)).doubleValue();
+		fy = (new Double(dy)).doubleValue();
+		fz = (new Double(dz)).doubleValue();
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
-		rM.getRotMatrix(fx,fy,fz,(float) thetaDeg,rot_mtx);
+		rM.getRotMatrix(fx,fy,fz,(double) thetaDeg,rot_mtx);
 
 		for(int w=0;w<numberOfResidues;w++) {
 			for(int q=0;q<residue[w].numberOfAtoms;q++) {
@@ -1915,14 +2034,14 @@ public class Molecule implements Serializable{
 
 	// Places the geometric center of the molecule at the origin
 	public void center(){
-		float theCent[];
+		double theCent[];
 		theCent = getCenter();
 		translateMolecule(-theCent[0],-theCent[1],-theCent[2]);
 	}
 
 	// Places the center of mass of the molecule at the origin
 	public void centerByMass(){
-		float theCOM[];
+		double theCOM[];
 		theCOM = getCenterOfMass();
 		translateMolecule(-theCOM[0],-theCOM[1],-theCOM[2]);
 	}
@@ -2287,8 +2406,8 @@ public class Molecule implements Serializable{
 	}
 
 	//Return the coordinates from actualCoordinates[] for atom atomNum
-	public float [] getActualCoord(int atomNum){
-		float c[] = new float[3];
+	public double [] getActualCoord(int atomNum){
+		double c[] = new double[3];
 		c[0] = actualCoordinates[atomNum*3];
 		c[1] = actualCoordinates[atomNum*3+1];
 		c[2] = actualCoordinates[atomNum*3+2];
@@ -2343,7 +2462,9 @@ public class Molecule implements Serializable{
 						}
 					}
 					else if (atom[i].elementType.equalsIgnoreCase("Cl") ||
-							 atom[j].elementType.equalsIgnoreCase("Cl")) {
+							 atom[j].elementType.equalsIgnoreCase("Cl") ||
+                                                         atom[i].elementType.equalsIgnoreCase("P") ||
+							 atom[j].elementType.equalsIgnoreCase("P")) {
 						if(atom[i].strandNumber == atom[j].strandNumber){
 							atom[i].addBond(j);
 							atom[j].addBond(i);
@@ -2406,7 +2527,7 @@ public class Molecule implements Serializable{
 
 	//Backs up the coordinates of the atoms in the atom[] array
 	public void backupAtomCoord (){
-		backupCoordinates = new float [actualCoordinates.length];
+		backupCoordinates = new double [actualCoordinates.length];
 
 		for (int i=0; i<numberOfAtoms; i++)
 			backupCoord(atom[i]);
@@ -2451,17 +2572,17 @@ public class Molecule implements Serializable{
 	}
 	////////////////////////////////////////////////////////////
 
-	public float [] getActualCoords(){
-		float retCoord[] = new float[actualCoordinates.length];
+	public double [] getActualCoords(){
+		double retCoord[] = new double[actualCoordinates.length];
 		System.arraycopy(actualCoordinates, 0, retCoord, 0, actualCoordinates.length);
 		return retCoord;
 	}
 
-	public void setActualCoords(float ac[]){
+	public void setActualCoords(double ac[]){
 		System.arraycopy(ac, 0, actualCoordinates, 0, actualCoordinates.length);
 	}
 
-	public void saveMolecule(String fname, float energy){
+	public void saveMolecule(String fname, double energy){
 		backupAtomCoord();
 		boolean printSegID = false;
 		try{
@@ -2505,9 +2626,9 @@ public class Molecule implements Serializable{
         RotMatrix r = new RotMatrix();
 
         //Coordinates of key atoms in the residue
-        float NCoord[] = getActualCoord(res.getAtomNameToMolnum("N"));
-        float CACoord[] = getActualCoord(res.getAtomNameToMolnum("CA"));
-        float CCoord[] = getActualCoord(res.getAtomNameToMolnum("C"));
+        double NCoord[] = getActualCoord(res.getAtomNameToMolnum("N"));
+        double CACoord[] = getActualCoord(res.getAtomNameToMolnum("CA"));
+        double CCoord[] = getActualCoord(res.getAtomNameToMolnum("C"));
 
         if(res.name.equalsIgnoreCase("GLY")){
             //No rotation matrix but two HAs to handle
@@ -2529,10 +2650,10 @@ public class Molecule implements Serializable{
             }
 
 
-            float t1[] = r.get4thPoint(NCoord, CCoord, CACoord, 1.100f, 109.3f, -121.6f);
-            float t2[] = r.get4thPoint(CCoord, NCoord, CACoord, 1.100f, 109.3f, 121.6f);
+            double t1[] = r.get4thPoint(NCoord, CCoord, CACoord, 1.100f, 109.3f, -121.6f);
+            double t2[] = r.get4thPoint(CCoord, NCoord, CACoord, 1.100f, 109.3f, 121.6f);
 
-            float newHA[] = r.subtract( r.scale( r.add(t1,t2) , 0.5f), CACoord);
+            double newHA[] = r.subtract( r.scale( r.add(t1,t2) , 0.5f), CACoord);
             newHA = r.add( r.scale( newHA, 1.100f / r.norm(newHA) ), CACoord );
 
             System.arraycopy(newHA, 0, actualCoordinates, HANum*3, 3);//Change the HA actualCoordinates
@@ -2559,9 +2680,9 @@ public class Molecule implements Serializable{
         }
         else{//Will have a C-beta
 
-            float CBCoord[] = getActualCoord(res.getAtomNameToMolnum("CB"));
+            double CBCoord[] = getActualCoord(res.getAtomNameToMolnum("CB"));
 
-            float[] t1, t2;
+            double[] t1, t2;
 
             if(res.name.equalsIgnoreCase("ALA")) {
                 t1 = r.get4thPoint(NCoord, CCoord, CACoord, 1.536f, 110.1f, 122.9f);
@@ -2580,20 +2701,20 @@ public class Molecule implements Serializable{
                 t2 = r.get4thPoint(CCoord, NCoord, CACoord, 1.530f, 110.5f, -122.6f);
             }
 
-            float idealCB[] = r.scale(r.add(t1, t2), 0.5f);
+            double idealCB[] = r.scale(r.add(t1, t2), 0.5f);
 
             //Now the rotation matrix for the sidechain will give the smallest rotation
             //that maps CBCoord to idealCB
-            float ABOld[] = r.subtract(CBCoord, CACoord);
-            float ABNew[] = r.subtract(idealCB, CACoord);
-            float theta = r.getAngle( ABOld, ABNew );
-            float rotax[] = r.cross(ABOld, ABNew);
-            float SC_mtx[][];
+            double ABOld[] = r.subtract(CBCoord, CACoord);
+            double ABNew[] = r.subtract(idealCB, CACoord);
+            double theta = r.getAngle( ABOld, ABNew );
+            double rotax[] = r.cross(ABOld, ABNew);
+            double SC_mtx[][];
 
             if( r.norm(rotax) == 0 )//CB already in the ideal position
                 SC_mtx = r.identity();
             else{
-                SC_mtx = new float[3][3];
+                SC_mtx = new double[3][3];
                 r.getRotMatrixRad(rotax[0], rotax[1], rotax[2], theta, SC_mtx);
             }
 
@@ -2605,7 +2726,7 @@ public class Molecule implements Serializable{
 
             t1 = r.get4thPoint(NCoord, CCoord, CACoord, 1.100f, 107.9f, -118.3f);
             t2 = r.get4thPoint(CCoord, NCoord, CACoord, 1.100f, 108.1f, 118.2f);
-            float newHA[] = r.subtract( r.scale( r.add(t1,t2) , 0.5f), CACoord);
+            double newHA[] = r.subtract( r.scale( r.add(t1,t2) , 0.5f), CACoord);
             newHA = r.add( r.scale( newHA, 1.100f / r.norm(newHA) ), CACoord );
 
             System.arraycopy(newHA, 0, actualCoordinates, HANum*3, 3);//Change the HA actualCoordinates
@@ -2629,8 +2750,8 @@ public class Molecule implements Serializable{
         //(from the Amber template)
         //Returns true for success, false for failure
 
-        float CANCD_ideal = (float)(Math.PI*111.5/180);
-        float CACBCG_ideal = (float)(Math.PI*103.9/180);
+        double CANCD_ideal = (double)(Math.PI*111.5/180);
+        double CACBCG_ideal = (double)(Math.PI*103.9/180);
         //from Ho et al, Protein Sci 2005;14:1011
 
 
@@ -2652,32 +2773,32 @@ public class Molecule implements Serializable{
         int CDNum = res.getAtomNameToMolnum("CD");
 
         //actual coordinates
-        float NCoord[] = getActualCoord(NNum);
-        float CACoord[] = getActualCoord(CANum);
-        float CBCoord[] = getActualCoord(CBNum);
-        float CGCoord[] = getActualCoord(CGNum);
-        float CDCoord[] = getActualCoord(CDNum);
+        double NCoord[] = getActualCoord(NNum);
+        double CACoord[] = getActualCoord(CANum);
+        double CBCoord[] = getActualCoord(CBNum);
+        double CGCoord[] = getActualCoord(CGNum);
+        double CDCoord[] = getActualCoord(CDNum);
 
 
         //First adjust the bond angles
-        float ncd[] = r.subtract( CDCoord, NCoord );
-        float canhat[] = r.subtract( NCoord, CACoord );//Unit vector in CA --> N direction
-        float vhat[] = r.perpendicularComponent(ncd, canhat);
+        double ncd[] = r.subtract( CDCoord, NCoord );
+        double canhat[] = r.subtract( NCoord, CACoord );//Unit vector in CA --> N direction
+        double vhat[] = r.perpendicularComponent(ncd, canhat);
         canhat = r.scale( canhat, 1/r.norm(canhat) );
         vhat = r.scale( vhat, 1/r.norm(vhat) );
-        ncd = r.scale( r.add( r.scale( canhat, -(float)Math.cos(CANCD_ideal) ) ,
-                r.scale( vhat, (float)Math.sin(CANCD_ideal) ) ), r.norm(ncd) );
+        ncd = r.scale( r.add( r.scale( canhat, -(double)Math.cos(CANCD_ideal) ) ,
+                r.scale( vhat, (double)Math.sin(CANCD_ideal) ) ), r.norm(ncd) );
         CDCoord = r.add( ncd , NCoord );
 
         System.arraycopy( CDCoord, 0, actualCoordinates, 3*CDNum, 3 );//Store the new CD coordinates
 
-        float cbcg[] = r.subtract( CGCoord, CBCoord );
-        float cacbhat[] = r.subtract( CBCoord, CACoord );
-        float what[] = r.perpendicularComponent(cbcg, cacbhat);
+        double cbcg[] = r.subtract( CGCoord, CBCoord );
+        double cacbhat[] = r.subtract( CBCoord, CACoord );
+        double what[] = r.perpendicularComponent(cbcg, cacbhat);
         cacbhat = r.scale( cacbhat, 1/r.norm(cacbhat) );//Unit vector in CA --> CB direction
         what = r.scale( what, 1/r.norm(what) );
-        cbcg = r.scale( r.add( r.scale( cacbhat, -(float)Math.cos(CACBCG_ideal) ) ,
-                r.scale( what, (float)Math.sin(CACBCG_ideal) ) ), r.norm(cbcg) );
+        cbcg = r.scale( r.add( r.scale( cacbhat, -(double)Math.cos(CACBCG_ideal) ) ,
+                r.scale( what, (double)Math.sin(CACBCG_ideal) ) ), r.norm(cbcg) );
         CGCoord = r.add( cbcg , CBCoord );
 
         System.arraycopy( CGCoord, 0, actualCoordinates, 3*CGNum, 3 );//Store the new CG coordinates (their torsion will be modified later)
@@ -2685,43 +2806,44 @@ public class Molecule implements Serializable{
 
         //Now calculate chi1.
 
-        float dir2[] = r.perpendicularComponent( canhat , cacbhat);
+        double dir2[] = r.perpendicularComponent( canhat , cacbhat);
         dir2 = r.scale( dir2 , 1/r.norm(dir2) );
-        float dir3[] = r.cross( cacbhat , dir2 );
-        float dBG = r.norm(cbcg);
-        float sina = (float)Math.sin(CACBCG_ideal);
-        float cosa = (float)Math.cos(CACBCG_ideal);
+        double dir3[] = r.cross( cacbhat , dir2 );
+        double dBG = r.norm(cbcg);
+        double sina = (double)Math.sin(CACBCG_ideal);
+        double cosa = (double)Math.cos(CACBCG_ideal);
         //The position of CG will be given by CBCoord + dBG*(-cosa*cacbhat + sina*(dir2*cos(chi1)+dir3*sin(chi1)))
 
-        float CGCD = r.norm( r.subtract( idealPro.getAtomByName("CD").coord , idealPro.getAtomByName("CG").coord ) );
+        double CGCD = r.norm( r.subtract( idealPro.getAtomByName("CD").coord , idealPro.getAtomByName("CG").coord ) );
         //We now get chi1 by making the CG-CD distance be chi1
 
-        float[] cbcd = r.subtract( CDCoord, CBCoord );
-        float r1 = r.dot( cbcd , cacbhat );
-        float r2 = r.dot( cbcd , dir2 );
-        float r3 = r.dot( cbcd , dir3 );
+        double[] cbcd = r.subtract( CDCoord, CBCoord );
+        double r1 = r.dot( cbcd , cacbhat );
+        double r2 = r.dot( cbcd , dir2 );
+        double r3 = r.dot( cbcd , dir3 );
 
-        float A = ( (r1+cosa*dBG)*(r1+cosa*dBG) + r2*r2 + r3*r3 + dBG*dBG*sina*sina - CGCD*CGCD ) / (2*dBG*sina);
-        float R = (float)Math.sqrt( r2*r2 + r3*r3 );
+        double A = ( (r1+cosa*dBG)*(r1+cosa*dBG) + r2*r2 + r3*r3 + dBG*dBG*sina*sina - CGCD*CGCD ) / (2*dBG*sina);
+        double R = (double)Math.sqrt( r2*r2 + r3*r3 );
 
         if( Math.abs(A/R) > 1 ){
             res.validConf = false;//This will stay false until we run this function again and return true, thus fixing the ring, or until we mutate the residue
+            validSC = false;
             return false;
         }
         else{
 
-            float beta = (float)Math.atan2(r2, r3);
-            float asr = (float)Math.asin(A/R);
+            double beta = (double)Math.atan2(r2, r3);
+            double asr = (double)Math.asin(A/R);
 
-            float newChi1;
+            double newChi1;
 
             if(res.pucker == ProlineFlip.UP)
                 newChi1 = asr - beta;
             else//DOWN
-                newChi1 = (float)Math.PI - beta - asr;//Larger newChi1, since an arcsine is acute (puckers merge when asr = pi/2, i.e. A=R)
+                newChi1 = (double)Math.PI - beta - asr;//Larger newChi1, since an arcsine is acute (puckers merge when asr = pi/2, i.e. A=R)
 
 
-            newChi1 = 180*newChi1/((float)Math.PI);//Convert to degrees
+            newChi1 = 180*newChi1/((double)Math.PI);//Convert to degrees
 
             //Now move CG into place according to the new chi1
             int CGList[] = { res.getAtomNameToMolnum("CG") };//Just moving CG
@@ -2731,6 +2853,7 @@ public class Molecule implements Serializable{
             idealizeRingHydrogens(res, idealPro);//Put the hydrogens in place
 
             res.validConf = true;
+            updateValidSC();
             return true;
         }
 
@@ -2742,9 +2865,9 @@ public class Molecule implements Serializable{
         //Idealize the sidechain hydrogens (those bonded to CB, CG, and CD) of a proline
         //Does not change the heavy-atom coordinates
 
-        float HBAngle = 108.78f*(float)Math.PI/180;//HB1-CB-HB2 angle
-        float HGAngle = 108.47f*(float)Math.PI/180;
-        float HDAngle = 108.46f*(float)Math.PI/180;
+        double HBAngle = 108.78f*(double)Math.PI/180;//HB1-CB-HB2 angle
+        double HGAngle = 108.47f*(double)Math.PI/180;
+        double HDAngle = 108.46f*(double)Math.PI/180;
         //These values are from Allen et al, Chem. Eur. J. 2004, 10, 4512 – 4517
         //which is an ab initio study of free neutral proline
         //They provide constraints for structural refinement given heavy-atom positions,
@@ -2757,47 +2880,47 @@ public class Molecule implements Serializable{
 
         RotMatrix rm = new RotMatrix();
 
-        float HBDist = rm.norm( rm.subtract( idealPro.getAtomByName("HB2").coord , idealPro.getAtomByName("CB").coord ) );//CB-HB2 (or, assumed, CB-HB1 distance) (HB2 is nice because both HB1/2 and HB2/3 nomenclatures have it)
-        float HGDist = rm.norm( rm.subtract( idealPro.getAtomByName("HG2").coord , idealPro.getAtomByName("CG").coord ) );
-        float HDDist = rm.norm( rm.subtract( idealPro.getAtomByName("HD2").coord , idealPro.getAtomByName("CD").coord ) );
+        double HBDist = rm.norm( rm.subtract( idealPro.getAtomByName("HB2").coord , idealPro.getAtomByName("CB").coord ) );//CB-HB2 (or, assumed, CB-HB1 distance) (HB2 is nice because both HB1/2 and HB2/3 nomenclatures have it)
+        double HGDist = rm.norm( rm.subtract( idealPro.getAtomByName("HG2").coord , idealPro.getAtomByName("CG").coord ) );
+        double HDDist = rm.norm( rm.subtract( idealPro.getAtomByName("HD2").coord , idealPro.getAtomByName("CD").coord ) );
 
 
-        float CACoord[] = getActualCoord( res.getAtomNameToMolnum("CA") );
-        float CBCoord[] = getActualCoord( res.getAtomNameToMolnum("CB") );
-        float CGCoord[] = getActualCoord( res.getAtomNameToMolnum("CG") );
-        float CDCoord[] = getActualCoord( res.getAtomNameToMolnum("CD") );
-        float NCoord[] = getActualCoord( res.getAtomNameToMolnum("N") );
+        double CACoord[] = getActualCoord( res.getAtomNameToMolnum("CA") );
+        double CBCoord[] = getActualCoord( res.getAtomNameToMolnum("CB") );
+        double CGCoord[] = getActualCoord( res.getAtomNameToMolnum("CG") );
+        double CDCoord[] = getActualCoord( res.getAtomNameToMolnum("CD") );
+        double NCoord[] = getActualCoord( res.getAtomNameToMolnum("N") );
 
-        float CACB[] = rm.subtract(CBCoord,CACoord);
-        float CBCG[] = rm.subtract(CGCoord,CBCoord);
-        float CGCD[] = rm.subtract(CDCoord,CGCoord);
-        float CDN[] = rm.subtract(NCoord,CDCoord);
+        double CACB[] = rm.subtract(CBCoord,CACoord);
+        double CBCG[] = rm.subtract(CGCoord,CBCoord);
+        double CGCD[] = rm.subtract(CDCoord,CGCoord);
+        double CDN[] = rm.subtract(NCoord,CDCoord);
 
 
-        float BBisector[] = rm.average( CACB, rm.scale(CBCG,-1) );//Bisector of the HB1-CB-HB2 angle
-        float BPerpendicular[] = rm.cross( CACB, CBCG );//Perpendicular to the CA-CB-CG plane
-        float GBisector[] = rm.average( CBCG, rm.scale(CGCD,-1) );//Bisector of the HB1-CB-HB2 angle
-        float GPerpendicular[] = rm.cross( CBCG, CGCD );//Perpendicular to the CA-CB-CG plane
-        float DBisector[] = rm.average( CGCD, rm.scale(CDN,-1) );//Bisector of the HB1-CB-HB2 angle
-        float DPerpendicular[] = rm.cross( CGCD, CDN );//Perpendicular to the CA-CB-CG plane
+        double BBisector[] = rm.average( CACB, rm.scale(CBCG,-1) );//Bisector of the HB1-CB-HB2 angle
+        double BPerpendicular[] = rm.cross( CACB, CBCG );//Perpendicular to the CA-CB-CG plane
+        double GBisector[] = rm.average( CBCG, rm.scale(CGCD,-1) );//Bisector of the HB1-CB-HB2 angle
+        double GPerpendicular[] = rm.cross( CBCG, CGCD );//Perpendicular to the CA-CB-CG plane
+        double DBisector[] = rm.average( CGCD, rm.scale(CDN,-1) );//Bisector of the HB1-CB-HB2 angle
+        double DPerpendicular[] = rm.cross( CGCD, CDN );//Perpendicular to the CA-CB-CG plane
 
         //We scale these vectors so they can be used as components of the C-H bond vectors
-        BBisector = rm.scale( BBisector, HBDist * (float)Math.cos(HBAngle/2) / rm.norm(BBisector) );
-        GBisector = rm.scale( GBisector, HGDist* (float)Math.cos(HGAngle/2) / rm.norm(GBisector) );
-        DBisector = rm.scale( DBisector, HDDist* (float)Math.cos(HDAngle/2) / rm.norm(DBisector) );
-        BPerpendicular = rm.scale( BPerpendicular, HBDist * (float)Math.sin(HBAngle/2) / rm.norm(BPerpendicular) );
-        GPerpendicular = rm.scale( GPerpendicular, HGDist * (float)Math.sin(HGAngle/2) / rm.norm(GPerpendicular) );
-        DPerpendicular = rm.scale( DPerpendicular, HDDist * (float)Math.sin(HDAngle/2) / rm.norm(DPerpendicular) );
+        BBisector = rm.scale( BBisector, HBDist * (double)Math.cos(HBAngle/2) / rm.norm(BBisector) );
+        GBisector = rm.scale( GBisector, HGDist* (double)Math.cos(HGAngle/2) / rm.norm(GBisector) );
+        DBisector = rm.scale( DBisector, HDDist* (double)Math.cos(HDAngle/2) / rm.norm(DBisector) );
+        BPerpendicular = rm.scale( BPerpendicular, HBDist * (double)Math.sin(HBAngle/2) / rm.norm(BPerpendicular) );
+        GPerpendicular = rm.scale( GPerpendicular, HGDist * (double)Math.sin(HGAngle/2) / rm.norm(GPerpendicular) );
+        DPerpendicular = rm.scale( DPerpendicular, HDDist * (double)Math.sin(HDAngle/2) / rm.norm(DPerpendicular) );
 
 
         //Calculate the hydrogen coordinates
         //Using the AMBER hydrogen-naming system (HB1, HB2 etc. as in the AA templates)
-        float HB1Coord[] = rm.add( CBCoord, rm.add(BBisector, BPerpendicular) );
-        float HB2Coord[] = rm.add( CBCoord, rm.subtract(BBisector, BPerpendicular) );
-        float HG1Coord[] = rm.add( CGCoord, rm.add(GBisector, GPerpendicular) );
-        float HG2Coord[] = rm.add( CGCoord, rm.subtract(GBisector, GPerpendicular) );
-        float HD1Coord[] = rm.add( CDCoord, rm.subtract(DBisector, DPerpendicular) );
-        float HD2Coord[] = rm.add( CDCoord, rm.add(DBisector, DPerpendicular) );
+        double HB1Coord[] = rm.add( CBCoord, rm.add(BBisector, BPerpendicular) );
+        double HB2Coord[] = rm.add( CBCoord, rm.subtract(BBisector, BPerpendicular) );
+        double HG1Coord[] = rm.add( CGCoord, rm.add(GBisector, GPerpendicular) );
+        double HG2Coord[] = rm.add( CGCoord, rm.subtract(GBisector, GPerpendicular) );
+        double HD1Coord[] = rm.add( CDCoord, rm.subtract(DBisector, DPerpendicular) );
+        double HD2Coord[] = rm.add( CDCoord, rm.add(DBisector, DPerpendicular) );
 
 
         if( res.getAtomByName("HB1") != null ){//HB1-HB2 naming
@@ -2851,9 +2974,9 @@ public class Molecule implements Serializable{
                 Perturbation pert1 = perts[a];
                 for(int b=a+1;b<perts.length;b++){
                     Perturbation pert2 = perts[b];
-                    for(int c=0;c<pert1.resAffected.length;c++){
-                        for(int d=0;d<pert2.resAffected.length;d++){
-                            if( pert1.resAffected[c] == pert2.resAffected[d] ){//Overlap
+                    for(int c=0;c<pert1.resDirectlyAffected.length;c++){
+                        for(int d=0;d<pert2.resDirectlyAffected.length;d++){
+                            if( pert1.resDirectlyAffected[c] == pert2.resDirectlyAffected[d] ){//Overlap
                                 if( !scc.get(a).contains(b) )
                                     scc.get(a).add(b);
                             }
@@ -2981,12 +3104,27 @@ public class Molecule implements Serializable{
     }
 
 
-    public boolean hasInvalidConf(){//See if any of the residues are in an invalid conformation
+    public void updateValidSC(){//See if any of the residues are in an invalid SC conformation
+        //update validSC accordingly
+        validSC = true;
         for(Residue res : residue){
-            if(!res.validConf)
-                return true;
+            if(!res.validConf){
+                validSC = false;
+                return;
+            }
         }
-        return false;
+    }
+
+    public void updateValidBB(){
+        //Check if any of the perturbations are in an invalid state
+        //and update validBB accordingly
+        validBB = true;
+        for(Perturbation pert : perts){
+            if(pert.invalidState){
+                validBB = false;
+                return;
+            }
+        }
     }
 
 
@@ -2998,7 +3136,29 @@ public class Molecule implements Serializable{
         for( Perturbation pert : perts ){
             pert.curParam = ( pert.maxParams[pert.curState] + pert.minParams[pert.curState] )/2;
         }
+        //Also, Perturbation.storeResBB and Perturbation.restoreResBB rely on the strand
+        //rotation/translation information to tell if the strand has been rotated/translated for minimization
+        //so we will reset these to null as well, indicating a return to the original reference frame,
+        //even though these aren't technically perturbation parameters
+        for( Strand str : strand ){
+            if(str.rotTrans){
+                str.strStartCOM = null;
+                str.curRotAngles = null;
+                str.curTrans = null;
+                str.curRotMatrix = null;
+            }
+        }
     }
+    
+    
+
+    
+    public void setAllEval() {
+            for(Residue r: residue)
+                    r.setEnergyEval(true, true);
+
+    }
+
 
 
 }

@@ -81,13 +81,13 @@ public class EEF1 implements Serializable {
 	final int numAtTypesEEF1 = 17;
 	String groupEEF1names[] = new String[numAtTypesEEF1];
 	String atTypeEEF1names[] = new String[numAtTypesEEF1];
-	float atEEF1Vol[] = new float[numAtTypesEEF1];
-	float dGiRef[] = new float[numAtTypesEEF1];
-	float dGiFree[] = new float[numAtTypesEEF1];
-	float dHiRef[] = new float[numAtTypesEEF1];
-	float dCpiRef[] = new float[numAtTypesEEF1];
-	float lambdai[] = new float[numAtTypesEEF1];
-	float vdWri[] = new float[numAtTypesEEF1];	
+	double atEEF1Vol[] = new double[numAtTypesEEF1];
+	double dGiRef[] = new double[numAtTypesEEF1];
+	double dGiFree[] = new double[numAtTypesEEF1];
+	double dHiRef[] = new double[numAtTypesEEF1];
+	double dCpiRef[] = new double[numAtTypesEEF1];
+	double lambdai[] = new double[numAtTypesEEF1];
+	double vdWri[] = new double[numAtTypesEEF1];	
 
 	
 	//constructor
@@ -116,13 +116,13 @@ public class EEF1 implements Serializable {
 		while (!(curLine==null)) {
 			groupEEF1names[tmpInt] = getToken(curLine,1);  // snag group name
 			atTypeEEF1names[tmpInt] = getToken(curLine,2);  // snag atom type
-			atEEF1Vol[tmpInt] = (new Float(getToken(curLine,3))).floatValue();
-			dGiRef[tmpInt] = (new Float(getToken(curLine,4))).floatValue();
-			dGiFree[tmpInt] = (new Float(getToken(curLine,5))).floatValue();
-			dHiRef[tmpInt] = (new Float(getToken(curLine,6))).floatValue();
-			dCpiRef[tmpInt] = (new Float(getToken(curLine,7))).floatValue();
-			lambdai[tmpInt] = (new Float(getToken(curLine,8))).floatValue();
-			vdWri[tmpInt] = (new Float(getToken(curLine,9))).floatValue();
+			atEEF1Vol[tmpInt] = (new Double(getToken(curLine,3))).doubleValue();
+			dGiRef[tmpInt] = (new Double(getToken(curLine,4))).doubleValue();
+			dGiFree[tmpInt] = (new Double(getToken(curLine,5))).doubleValue();
+			dHiRef[tmpInt] = (new Double(getToken(curLine,6))).doubleValue();
+			dCpiRef[tmpInt] = (new Double(getToken(curLine,7))).doubleValue();
+			lambdai[tmpInt] = (new Double(getToken(curLine,8))).doubleValue();
+			vdWri[tmpInt] = (new Double(getToken(curLine,9))).doubleValue();
 			tmpInt++;
 			curLine = bufread.readLine();
 		}

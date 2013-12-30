@@ -112,31 +112,31 @@ public class BackrubMinimizer implements Serializable {
 	Backrubs br = null; //handles the application of the backrub motions
 	
 	String backrubFile = null; //the file in which the allowed backrub angles are stored
-	float brSamples[][] = null; //the backrub samples (for the big rotation) for each flexible residue (in the system strand only)
+	double brSamples[][] = null; //the backrub samples (for the big rotation) for each flexible residue (in the system strand only)
 	boolean useBRsample[][] = null; //determines if the given backrub for the given residue should be considered
-	float theta2[][] = null; //the rotation angles for the first small rotation
-	float theta3[][] = null; //the rotation angles for the second small rotation
+	double theta2[][] = null; //the rotation angles for the first small rotation
+	double theta3[][] = null; //the rotation angles for the second small rotation
 	
-	final float ligRotSize = 0.5f; //initial rotation angle size (in degrees)
-	final float ligTransSize = 0.5f; //initial translation size (in angstrom)
+	final double ligRotSize = 0.5f; //initial rotation angle size (in degrees)
+	final double ligTransSize = 0.5f; //initial translation size (in angstrom)
 	final int numTransRotSteps = 10; //number translation/rotation steps for the ligand
-	float ligMaxTrans = 1.2f; //the maximum ligand translation allowed (computed as allowed CA displacement)
+	double ligMaxTrans = 1.2f; //the maximum ligand translation allowed (computed as allowed CA displacement)
 	//double initLigCA[] = null;
 	
 	private double bigE = Math.pow(10, 38);
 	
 	private double minE = bigE; //the minimum computed energy
-	private float minEbrSample[][] = null; //the backrub angles for each of the flexible residues (in the system strand) that give the minimum energy
+	private double minEbrSample[][] = null; //the backrub angles for each of the flexible residues (in the system strand) that give the minimum energy
 	private double maxE = -bigE; //the max computed energy (among sterically-allowed conformations)
-	private float maxEbrSample[][] = null; //the backrub angles for each of the flexible residues (in the system strand) that give the max energy
+	private double maxEbrSample[][] = null; //the backrub angles for each of the flexible residues (in the system strand) that give the max energy
 	
-	//final float idealTauGly = 113.1f; //the ideal tau value for Gly
-	//final float idealTauPro = 112.1f; //the ideal tau value for Pro
-	final float idealTauOther = 111.0f; //the ideal tau value for all other amino acids (not Gly and not Pro)
-	final float tauCutoff = 5.5f; //the cutoff value for tau deviation from the ideal values (if the initial tau values are within the ideal range)
+	//final double idealTauGly = 113.1f; //the ideal tau value for Gly
+	//final double idealTauPro = 112.1f; //the ideal tau value for Pro
+	final double idealTauOther = 111.0f; //the ideal tau value for all other amino acids (not Gly and not Pro)
+	final double tauCutoff = 5.5f; //the cutoff value for tau deviation from the ideal values (if the initial tau values are within the ideal range)
 	
 	boolean hSteric = true; //determines if hydrogens are used in steric checks
-	float overlapThresh = -10000.0f; //the allowed overlap threshold
+	double overlapThresh = -10000.0f; //the allowed overlap threshold
 	
 	int numberOfStrands;
 	int numMutRes; //KER: total number of mutable residues (i.e. what used to be residueMap.length)
@@ -146,7 +146,7 @@ public class BackrubMinimizer implements Serializable {
 	}
 	
 	//Initialize for the system strand only
-	public void initialize(Molecule mol, Amber96ext theA96ff, int strMut[][], String brFile, boolean hS, float stThresh, int numStrands, boolean readFile) {
+	public void initialize(Molecule mol, Amber96ext theA96ff, int strMut[][], String brFile, boolean hS, double stThresh, int numStrands, boolean readFile) {
 		
 		m = mol;
 		a96ff = theA96ff;
@@ -235,7 +235,7 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Initialize for a system and a ligand
 	/*public void initialize(Molecule mol, Amber96ext theA96ff, int residueMap[], int sysStrand,
-			int ligStrand, String brFile, boolean hS, float stThresh){
+			int ligStrand, String brFile, boolean hS, double stThresh){
 		
 		MAX_NUM_ATOMS_RES = Math.max(MAX_NUM_ATOMS_RES, mol.strand[ligStrand].residue[0].numberOfAtoms);
 	
@@ -281,10 +281,10 @@ public class BackrubMinimizer implements Serializable {
 		
 		
 		minE = Math.pow(10, 38);
-		minEbrSample = new float[numMutRes][];
-		float curEbrSample[][] = new float[numMutRes][];
+		minEbrSample = new double[numMutRes][];
+		double curEbrSample[][] = new double[numMutRes][];
 		maxE = -Math.pow(10, 38);
-		maxEbrSample = new float[numMutRes][];
+		maxEbrSample = new double[numMutRes][];
 		
 		//if (ligStrNum!=-1) //find the initial ligand CA position
 		//	initLigCA = getCAcoord(m.strand[ligStrNum].residue[0].moleculeResidueNumber);
@@ -326,15 +326,15 @@ public class BackrubMinimizer implements Serializable {
 	//Called by minimizeFull()
 	//Test all combinations of backrubs for the residues in residueMap[] (in the system strand)
 	//		and determine the lowest energy among these backrub combinations
-	private void minimizeFullHelper(int curDepth, float curEbrSample[][], boolean shellRun, boolean templateOnly, 
+	private void minimizeFullHelper(int curDepth, double curEbrSample[][], boolean shellRun, boolean templateOnly, 
 			boolean useBRforCurRot[][], int excludeList[][][]){
 		
 		if (curDepth==numMutRes){ //a fully-assigned conformation for the system strand
 			
-			float storedCoord[][][] = new float[numberOfStrands][][];
+			double storedCoord[][][] = new double[numberOfStrands][][];
 			for(int str=0;str<numberOfStrands;str++){
 				if(m.strand[str].rotTrans){ //there is a ligand, so translate/rotate the ligand
-					storedCoord[str] = new float[m.strand[str].numberOfResidues][];
+					storedCoord[str] = new double[m.strand[str].numberOfResidues][];
 					for(int i=0; i<m.strand[str].numberOfResidues;i++)
 						storedCoord[str][i] = storeCoord(m.strand[str].residue[i].moleculeResidueNumber);
 				//doLigTransRot(); //this should be un-commented if we want to translate/rotate the ligand for each backrub combination
@@ -378,7 +378,7 @@ public class BackrubMinimizer implements Serializable {
 				for (int i=0; i<brSamples[curDepth].length; i++){ //apply all backrub samples
 					if (useBRsample[curDepth][i] && useBRforCurRot[curDepth][i]) { //allowed backrub
 						
-						float storedCoord[][] = new float[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
+						double storedCoord[][] = new double[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
 						if (brSamples[curDepth][i]!=0.0f){
 							storedCoord[0] = storeCoord(m.strand[str].residue[strResNum-1].moleculeResidueNumber); 
 							storedCoord[1] = storeCoord(curRes.moleculeResidueNumber);
@@ -390,7 +390,7 @@ public class BackrubMinimizer implements Serializable {
 						if ( ( curRes.flexible && checkSterics(m,str,strResNum,excludeList[curDepth],true) )
 								|| ( (!curRes.flexible) && checkSterics(m,str,strResNum,excludeList[curDepth],false) ) ){ //allowed steric
 							
-							curEbrSample[curDepth] = new float[3];
+							curEbrSample[curDepth] = new double[3];
 							curEbrSample[curDepth][0] = brSamples[curDepth][i];
 							curEbrSample[curDepth][1] = theta2[curDepth][i];
 							curEbrSample[curDepth][2] = theta3[curDepth][i];
@@ -445,11 +445,11 @@ public class BackrubMinimizer implements Serializable {
 	//Performs the ligand translation/rotation
 	private void doStrTransRot(int strNumber){
 		
-		float rotStep = ligRotSize;
-		float transStep = ligTransSize;
+		double rotStep = ligRotSize;
+		double transStep = ligTransSize;
 		
-		float deltaRotStep = rotStep/numTransRotSteps;
-		float deltaTransStep = transStep/numTransRotSteps;
+		double deltaRotStep = rotStep/numTransRotSteps;
+		double deltaTransStep = transStep/numTransRotSteps;
 		
 		double[] initCOM = m.getStrandCOM(strNumber);
 		
@@ -461,14 +461,14 @@ public class BackrubMinimizer implements Serializable {
 		for (int j=0; j<numTransRotSteps; j++){
 			centOfMass = m.getStrandCOM(strNumber);
 			for (int curCoord=0; curCoord<3; curCoord++){
-				float dTrans = compTrans(resNums,resNums.length,curCoord,transStep);
+				double dTrans = compTrans(resNums,resNums.length,curCoord,transStep);
 				if (Math.abs(dTrans)!=0.0)
 					updateCumulativeTrans(strNumber, curCoord,dTrans,false, initCOM);
 			}
 			centOfMass = m.getStrandCOM(strNumber);
 			for (int curCoord=0; curCoord<3; curCoord++){
-				float axisToRot[] = getRotVector(curCoord); //determine the axis of rotation
-				float dRot = compRot(resNums,rotStep,centOfMass,axisToRot);
+				double axisToRot[] = getRotVector(curCoord); //determine the axis of rotation
+				double dRot = compRot(resNums,rotStep,centOfMass,axisToRot);
 				if (Math.abs(dRot)!=0.0)
 					updateCumulativeRot(resNums,dRot,centOfMass,false,axisToRot);
 			}
@@ -480,16 +480,16 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Determines the direction for the translation of size transStep for
 	//		the numRes number of residues in resNums[] (molecule-relative numbering) in the direction of coord
-	private float compTrans(int resNums[], int numRes, int coord, float transStep){
+	private double compTrans(int resNums[], int numRes, int coord, double transStep){
 		
 		//determine the translation size
-		float d[] = new float[3];
+		double d[] = new double[3];
 		for (int i=0; i<d.length; i++)
 			d[i] = 0.0f;
 		d[coord] = transStep;	
 		
 		double initialEnergy[], secondEnergy[], thirdEnergy[];
-		float storedCoord[][] = new float[numRes][];
+		double storedCoord[][] = new double[numRes][];
 		
 		//Store the actualCoordinates for resNum before any changes
 		for (int i=0; i<numRes; i++)
@@ -521,11 +521,11 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Checks if a translation of transStep in the direction of coord will move the CA of the ligand further than the limit
 	//		and applies the optimal translation if (onlyCheck==false)
-	private float updateCumulativeTrans(int strNum, int coord, float transStep, boolean onlyCheck, double[] initCOM){
+	private double updateCumulativeTrans(int strNum, int coord, double transStep, boolean onlyCheck, double[] initCOM){
 		
 		//int resNum = m.strand[ligStrNum].residue[0].moleculeResidueNumber;
 		
-		float curCOM[] = m.strand[strNum].getCenterOfMass();
+		double curCOM[] = m.strand[strNum].getCenterOfMass();
 		
 		//Determine the new CA if we took this step (the translation is only in the direction of the coord coordinate)
 		double tmpCOM[] = new double[3];
@@ -555,14 +555,14 @@ public class BackrubMinimizer implements Serializable {
 				s = Math.sqrt(mt2-a[0]-a[1]);
 			
 			if (curDisp[coord]>=0)
-				transStep = (float)(-curDisp[coord] + s);
+				transStep = (double)(-curDisp[coord] + s);
 			else
-				transStep = (float)(-curDisp[coord] - s);
+				transStep = (double)(-curDisp[coord] - s);
 				
 		}
 		
 		// compute the translation to get us to the new CA
-		float theTranslation[] = new float[3];
+		double theTranslation[] = new double[3];
 		for (int i=0; i<3; i++)
 			theTranslation[i] = 0.0f;
 		theTranslation[coord] = transStep;
@@ -576,10 +576,10 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Determines the direction for the rotation of size rotStep centered at center[], for
 	//		the numRes number of residues in resNums[]  (molecule-relative numbering) around the axisToRot axis
-	private float compRot(int resNums[], float rotStep, double center[], float axisToRot[]){		
+	private double compRot(int resNums[], double rotStep, double center[], double axisToRot[]){		
 		
 		double initialEnergy[], secondEnergy[], thirdEnergy[];
-		float storedCoord[][] = new float[resNums.length][];
+		double storedCoord[][] = new double[resNums.length][];
 		
 		//Store the actualCoordinates for resNum before any changes
 		for (int i=0; i<resNums.length; i++)
@@ -614,10 +614,10 @@ public class BackrubMinimizer implements Serializable {
 	//		the rotation is decresed so that CA is moved to the limit;
 	//If centerIsCA is true, then the center of rotation is the CA atom of residue resNum, so the rotation will not change the CA position;
 	//Only if (checkOnly==false), then the rotation is actually performed
-	private float updateCumulativeRot(int[] resNums, float rotStep, double center[], boolean checkOnly, float axisToRot[]){
+	private double updateCumulativeRot(int[] resNums, double rotStep, double center[], boolean checkOnly, double axisToRot[]){
 		
 		
-		float storedCoord[][] = new float[resNums.length][];
+		double storedCoord[][] = new double[resNums.length][];
 		
 		//Store the actualCoordinates for resNum before any changes
 		for (int i=0; i<resNums.length; i++)
@@ -654,7 +654,7 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Performs a binary search to find a value for thetaDeg rotation that will rotate the CA for resNum to the maximum allowed limit;
 	//The initial coordinates for CA are given in coord[], the rotation is done around axis axisToRot[] and around center center[]
-	/*private float binSearchRotStep(double coord[], float axisToRot[], double center[], float origTheta, int resNum){
+	/*private double binSearchRotStep(double coord[], double axisToRot[], double center[], double origTheta, int resNum){
 		
 		double newDist;
 		
@@ -662,8 +662,8 @@ public class BackrubMinimizer implements Serializable {
 		for (int i=0; i<3; i++)
 			newCoord[i] = coord[i];
 		
-		float thetaDeg = origTheta;
-		float thetaStep = origTheta/2.0f;
+		double thetaDeg = origTheta;
+		double thetaStep = origTheta/2.0f;
 		
 		int curStep = 1;
 		while (Math.abs(thetaStep)>0.01){ //thetaStep can be negative
@@ -674,7 +674,7 @@ public class BackrubMinimizer implements Serializable {
 				return thetaDeg;
 			}
 			else {
-				thetaStep = origTheta/(float)Math.pow(2.0,curStep);
+				thetaStep = origTheta/(double)Math.pow(2.0,curStep);
 				if (newDist>ligMaxTrans)
 					thetaDeg -= thetaStep;
 				else
@@ -686,7 +686,7 @@ public class BackrubMinimizer implements Serializable {
 	}*/
 	
 	//Determines in which direction the best energy is (called by compRot() and compTrans() )
-	private float getDir(double e1, double e2, double e3, float step){
+	private double getDir(double e1, double e2, double e3, double step){
 		
 		if ((e1 > e2)&&(e1 > e3)){
 			if ((e1 - e2)>(e1 - e3))
@@ -734,9 +734,9 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Determines the vector around which the rotation is to be performed;
 	//Currently, the vector is the coordinate axis specified by axisNum
-	public float [] getRotVector(int axisNum){
+	public double [] getRotVector(int axisNum){
 		
-		float axisToRot[] = new float[3];
+		double axisToRot[] = new double[3];
 		for (int i=0; i<axisToRot.length; i++)
 			axisToRot[i] = 0.0f;
 		axisToRot[axisNum] = 1.0f;
@@ -760,13 +760,13 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Rotates the point with coordinates coord[] with thetaDeg degrees around the axis of rotation d[] and around center c[];
 	//Returns the new coordinates in newCoord[] and does not modify the original coordinates
-	private double [] rotatePoint(double coord[], float thetaDeg, float d[], double c[]){
+	private double [] rotatePoint(double coord[], double thetaDeg, double d[], double c[]){
 		
 		double newCoord[] = new double[3];
 		
 		double tx,ty,tz;
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(d[0],d[1],d[2],thetaDeg,rot_mtx);
 			
@@ -774,17 +774,17 @@ public class BackrubMinimizer implements Serializable {
 		ty=coord[1] - c[1];
 		tz=coord[2] - c[2];
 
-		newCoord[0] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + c[0]);
-		newCoord[1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + c[1]);
-		newCoord[2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + c[2]);
+		newCoord[0] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + c[0]);
+		newCoord[1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + c[1]);
+		newCoord[2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + c[2]);
 		
 		return newCoord;
 	}
 	
 	//Returns the current actualCoordinates for residue resNum (molecule-relative numbering)
-	private float [] storeCoord(int resNum){
+	private double [] storeCoord(int resNum){
 		
-		float storedCoord[] = new float[m.residue[resNum].numberOfAtoms * 3];
+		double storedCoord[] = new double[m.residue[resNum].numberOfAtoms * 3];
 		for (int i=0; i<m.residue[resNum].numberOfAtoms; i++){
 			
 			int curAtom = m.residue[resNum].atom[i].moleculeAtomNumber;
@@ -796,7 +796,7 @@ public class BackrubMinimizer implements Serializable {
 	}
 	
 	//Sets the actualCoordinates for residue resNum (molecule-relative numbering) to the ones in storedCoord[]
-	private void restoreCoord(int resNum, float storedCoord[]){
+	private void restoreCoord(int resNum, double storedCoord[]){
 		
 		for (int i=0; i<m.residue[resNum].numberOfAtoms; i++){
 			
@@ -830,7 +830,7 @@ public class BackrubMinimizer implements Serializable {
 					if (useBRsample[curDepth][i]) {
 						
 						try{
-						float storedCoord[][] = new float[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
+						double storedCoord[][] = new double[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
 						if (brSamples[curDepth][i]!=0.0f){
 							storedCoord[0] = storeCoord(m.strand[str].residue[strResNum-1].moleculeResidueNumber); 
 							storedCoord[1] = storeCoord(curRes.moleculeResidueNumber);
@@ -892,12 +892,12 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Performs a precomputation of the allowed backrub angles (brSamples[][], theta2[][], and theta3[][]);
 	//		Outputs the computed angles to the backrubFile, which is then read upon each initialize
-	public void precomputeBackrubs(int numBackrubSamples, float backrubStepSize){
+	public void precomputeBackrubs(int numBackrubSamples, double backrubStepSize){
 		
 		a96ff.calculateTypesWithTemplates(); //assign force field atom types and parameters
 		
 		//Compute the big rotation angles
-		brSamples = new float[numMutRes][2*numBackrubSamples+1];
+		brSamples = new double[numMutRes][2*numBackrubSamples+1];
 		useBRsample = new boolean[numMutRes][brSamples[0].length];
 		for (int i=0; i<brSamples.length; i++){
 			for (int j=0; j<brSamples[i].length; j++){
@@ -908,8 +908,8 @@ public class BackrubMinimizer implements Serializable {
 		
 		//Compute the two small rotation angles and prune the infeasible big/small angle choices
 		br = new Backrubs();
-		theta2 = new float[brSamples.length][brSamples[0].length];
-		theta3 = new float[brSamples.length][brSamples[0].length];
+		theta2 = new double[brSamples.length][brSamples[0].length];
+		theta3 = new double[brSamples.length][brSamples[0].length];
 		
 		//Generate the list of atoms to exclude from steric overlap checks (this only considers residues in the system strand)
 		int excludeList[][] = generateExcludeListSteric(m,strandMut,-1,false,false);
@@ -928,12 +928,12 @@ public class BackrubMinimizer implements Serializable {
 					
 					Residue curRes = m.strand[str].residue[strResNum];
 					
-					float initTaus[] = new float [3]; //get the initial tau values
+					double initTaus[] = new double [3]; //get the initial tau values
 					initTaus[0] = getTau(m,str,strResNum-1);
 					initTaus[1] = getTau(m,str,strResNum);
 					initTaus[2] = getTau(m,str,strResNum+1);
 					
-					float theta[] = br.applyBackrub(m, str, curRes.strandResidueNumber, brSamples[i][j], true, 0.0f, 0.0f);
+					double theta[] = br.applyBackrub(m, str, curRes.strandResidueNumber, brSamples[i][j], true, 0.0f, 0.0f);
 					
 					theta2[i][j] = theta[0];
 					theta3[i][j] = theta[1];
@@ -952,7 +952,7 @@ public class BackrubMinimizer implements Serializable {
 	//Checks if the conformation for residue resNum of strand strNum in molecule m is feasible;
 	//Currently, checks for significant tau deviations for the tri-peptide between (resnum-1), resNum, (resNum+1)
 	//		and for steric clashes with the fixed part of the molecule
-	private boolean isBRfeasible(Molecule m, int strNum, int resNum, float initTaus[], int excludeList[][]){
+	private boolean isBRfeasible(Molecule m, int strNum, int resNum, double initTaus[], int excludeList[][]){
 		
 		if ( (!checkSterics(m, strNum, resNum-1, excludeList, false))
 				|| (!checkSterics(m, strNum, resNum, excludeList, false))
@@ -1008,16 +1008,16 @@ public class BackrubMinimizer implements Serializable {
 	
 	//Checks if the tau angles for residues (resNum-1), resNum, and (resNum+1) (strand-relative numbering)
 	//		of strand strNum in molecule m, are within the allowed range
-	private boolean checkAllowedTaus(Molecule m, int strNum, int resNum, float initTaus[]){
+	private boolean checkAllowedTaus(Molecule m, int strNum, int resNum, double initTaus[]){
 		
-		float curTaus[] = new float[3];
+		double curTaus[] = new double[3];
 		curTaus[0] = getTau(m,strNum,resNum-1);
 		curTaus[1] = getTau(m,strNum,resNum);
 		curTaus[2] = getTau(m,strNum,resNum+1);
 		
 		for (int i=0; i<curTaus.length; i++) {
 			
-			float curIdealTau = 10000.0f;
+			double curIdealTau = 10000.0f;
 			/*if (m.strand[strNum].residue[resNum-1+i].name.equalsIgnoreCase("GLY"))
 				curIdealTau = idealTauGly;
 			else if (m.strand[strNum].residue[resNum-1+i].name.equalsIgnoreCase("PRO"))
@@ -1037,7 +1037,7 @@ public class BackrubMinimizer implements Serializable {
 	}
 	
 	//Computes the tau value (from the actualCoordinates[]) for residue resNum (strand-relative numbering)	of strand strNum in molecule m
-	private float getTau(Molecule m, int strNum, int resNum){
+	private double getTau(Molecule m, int strNum, int resNum){
 		
 		Residue res = m.strand[strNum].residue[resNum];
 		Atom a[] = new Atom[3];
@@ -1050,7 +1050,7 @@ public class BackrubMinimizer implements Serializable {
 				a[2] = res.atom[i];
 		}
 		
-		float paC[][] = new float[3][3]; //get the actualCoordinates[] for the atoms
+		double paC[][] = new double[3][3]; //get the actualCoordinates[] for the atoms
 		for (int i=0; i<3; i++)
 			paC[i] = m.getActualCoord(a[i].moleculeAtomNumber);
 		
@@ -1058,7 +1058,7 @@ public class BackrubMinimizer implements Serializable {
 		for (int i=0; i<3; i++)
 			pa[i] = new Atom("",paC[i][0],paC[i][1],paC[i][2]);
 		
-		return ((float)pa[2].angle(pa[0], pa[1]));
+		return ((double)pa[2].angle(pa[0], pa[1]));
 	}
 	
 	//Generate an exclusion list of atoms not to be checked in steric checks, since their position is unknown due to possible backrubs;
@@ -1185,9 +1185,9 @@ public class BackrubMinimizer implements Serializable {
 				if (curLine==0) {//first line is the dimensions of brSamples[][], theta2[][], and theta3[][]
 					int s1 = new Integer(getToken(str,1)).intValue();
 					int s2 = new Integer(getToken(str,2)).intValue();
-					brSamples = new float[s1][s2];
-					theta2 = new float[s1][s2];
-					theta3 = new float[s1][s2];
+					brSamples = new double[s1][s2];
+					theta2 = new double[s1][s2];
+					theta3 = new double[s1][s2];
 					useBRsample = new boolean[s1][s2];
 					for (int i=0; i<useBRsample.length; i++){
 						for (int j=0; j<useBRsample[i].length; j++){
@@ -1198,9 +1198,9 @@ public class BackrubMinimizer implements Serializable {
 				else { //each line is in the format: ind1 ind2 brSamples[ind1][ind2] theta2[ind1][ind2] theta3[ind1][ind2]
 					int ind1 = new Integer(getToken(str,1)).intValue();
 					int ind2 = new Integer(getToken(str,2)).intValue();
-					brSamples[ind1][ind2] = new Float(getToken(str,3)).floatValue();
-					theta2[ind1][ind2] = new Float(getToken(str,4)).floatValue();
-					theta3[ind1][ind2] = new Float(getToken(str,5)).floatValue();
+					brSamples[ind1][ind2] = new Double(getToken(str,3)).doubleValue();
+					theta2[ind1][ind2] = new Double(getToken(str,4)).doubleValue();
+					theta3[ind1][ind2] = new Double(getToken(str,5)).doubleValue();
 					useBRsample[ind1][ind2] = true;
 				}
 				curLine++;
@@ -1248,7 +1248,7 @@ public class BackrubMinimizer implements Serializable {
 	//Computes the min and max intra-energy for resMapPos (index into residueMap[]);
 	//Since the backbone atoms of a given residue are included in the INTRA energy precomputation, a backrub
 	//		at that residue can change the intra-energy, so we need to compute the lower/upper bounds on the intra energies
-	public float [] getMinMaxIntraEnergyBR(int resMapPos){
+	public double [] getMinMaxIntraEnergyBR(int resMapPos){
 		
 		br = new Backrubs();
 		
@@ -1263,7 +1263,7 @@ public class BackrubMinimizer implements Serializable {
 		for (int i=0; i<brSamples[resMapPos].length; i++){ //apply all backrub samples
 			if (useBRsample[resMapPos][i]) { //allowed backrub
 		
-				float storedCoord[][] = new float[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
+				double storedCoord[][] = new double[3][]; //backup the actualCoordinates[] for the three affected residues before the current backrub
 				if (brSamples[resMapPos][i]!=0.0f){
 					storedCoord[0] = storeCoord(m.strand[str].residue[strResNum-1].moleculeResidueNumber); 
 					storedCoord[1] = storeCoord(curRes.moleculeResidueNumber);
@@ -1286,9 +1286,9 @@ public class BackrubMinimizer implements Serializable {
 			}
 		}
 		
-		float e[] = new float[2];
-		e[0] = (float)minIntra;
-		e[1] = (float)maxIntra;
+		double e[] = new double[2];
+		e[0] = (double)minIntra;
+		e[1] = (double)maxIntra;
 		
 		return e;
 	}

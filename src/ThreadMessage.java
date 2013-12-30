@@ -118,14 +118,14 @@ public class ThreadMessage {
 				}
 				return o;				
 			case FLOAT :
-				o = new Float[count];
-				if(obj instanceof Float[]){
+				o = new Double[count];
+				if(obj instanceof Double[]){
 					for(int i=offset; i<offset+count;i++)
-						((Float[])o)[i-offset]= ((Float[])obj)[i];
+						((Double[])o)[i-offset]= ((Double[])obj)[i];
 				}
 				else{
 					for(int i=offset; i<offset+count;i++)
-						((Float[])o)[i-offset]= ((float[])obj)[i];
+						((Double[])o)[i-offset]= ((double[])obj)[i];
 				}
 				return o;
 			case DOUBLE :

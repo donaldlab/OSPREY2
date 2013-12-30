@@ -73,6 +73,7 @@
  */
 
 
+import cern.colt.matrix.DoubleFactory1D;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
@@ -92,6 +93,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.math.*;
 
+import cern.colt.matrix.DoubleMatrix1D;
+import cern.colt.matrix.linalg.Algebra;
+import cern.jet.math.Functions;
+
 /**
  * 
  * This class provides a variety of tools and search algorithms for
@@ -109,17 +114,21 @@ public class RotamerSearch implements Serializable
 	// If the debug flag is set to true then additional debug statements are
 	//  printed to standard out.
 	public static final boolean debug = true;
-	final double constRT = 1.9891/1000.0 * 298.15;   // in kCal / kelvin-mole (the T value here should be consistent with T in EEF1)
+	/*final*/ static double constRT = 1.9891/1000.0 * 298.15;   // in kCal / kelvin-mole (the T value here should be consistent with T in EEF1)
 	
 	Molecule m;		// the molecule
 	Amber96ext a96ff;	// the forcefield and energy function to use for energy evaluation etc...
 	Amber96ext templateA96ff; //KER: forcefield that keeps the energy computation for the template 
 	Amber96ext res1A96ff; //KER: forcefields to store terms for single amino acid energy 
-    Amber96ext res2A96ff;
-    Amber96ext templateOffA96ff; //KER: templateOff is to compute the energy since we don't want to include backbone atoms in template
+        Amber96ext res2A96ff;
+        Amber96ext templateOffA96ff; //KER: templateOff is to compute the energy since we don't want to include backbone atoms in template
     							//for the matrix, only for the minimization
-	
-	SimpleMinimizer simpMin;	// the simple energy minimizer (side-chains)
+
+        CCDMinimizer ccdMin;//CCD-based minimizer: supports sidechains only at the moment but will do other stuff soon
+        boolean useCCD = true;//indicates use of ccdMin
+        EnergyFunction efunc;//Energy function for ccdMin
+
+        SimpleMinimizer simpMin;	// the simple energy minimizer (side-chains)
 	BBMinimizer bbMin = null;	//the backbone minimizer
 	BackrubMinimizer brMin = null;	//the backrub minimizer
 	//KER: eliminatedRotAtRes is now a 3D matrix for easier indexing (I don't think this will save space like the 6D array)
@@ -139,7 +148,7 @@ public class RotamerSearch implements Serializable
 	boolean allPruned = false;	// determines if all the rotamers for a given residue have been pruned by MinDEE;
 									// sends this information to the master node in the mutation search
 	
-	final float stericE = (float)Math.pow(10,38);	// the energy stored for an unallowed steric
+	final double stericE = (double)Math.pow(10,38);	// the energy stored for an unallowed steric
 	private double Ec_const = stericE;	// the minimum lower energy bound for a pruned conformation
 	private double boundForPartition = stericE; //a lower bound on the conformational energy for a given partition (used by DACS)
 	
@@ -171,8 +180,8 @@ public class RotamerSearch implements Serializable
 	//StrandRotamers ligROT = null;	// the rotamers object for the ligand strand
 	//int sysStrNum = -1;	// the strand number of the system
 	//int ligStrNum = -1;	// the strand number of the ligand
-	float overlapThresh = -10000.0f;	// hard overlap threshold used for checking sterics (this should be used when the atom positions will not be allowed to change after the steric check)
-	float softOverlapThresh = -10000.0f; //soft overlap threshold used for checking sterics (this should be used when the atom positions may be allowed to change after the steric check)
+	double overlapThresh = -10000.0f;	// hard overlap threshold used for checking sterics (this should be used when the atom positions will not be allowed to change after the steric check)
+	double softOverlapThresh = -10000.0f; //soft overlap threshold used for checking sterics (this should be used when the atom positions may be allowed to change after the steric check)
 	int curAANum[] = null;	// for each residue in the system strand, the
 			// index of the current amino acid type; if the residue is not
 			// rotamerizable (ie. it's not flexible) then the curAANum entry
@@ -204,7 +213,7 @@ public class RotamerSearch implements Serializable
         boolean minimizePerturbations;//When doing DEEPer, indicates perturbation-minimizing mode (i.e. DEE/A* step)
         String pertFile;//File with the perturbation information
 
-        float switchedTemplateE[] = null;//The changes in template energies caused by full structure switch perturbations
+        double switchedTemplateE[] = null;//The changes in template energies caused by full structure switch perturbations
 
 
 	private PairwiseEnergyMatrix arpMatrix = null;
@@ -226,8 +235,8 @@ public class RotamerSearch implements Serializable
 		// note that it is _not_ the same size as curAANum
 	//int curLigRotNum = 0;
 		// the current rotamer number of the ligand
-	float bestEMin = 9999999.0f; //this should ONLY be accessed/modified using the synchronized methods below
-	float bestEUnMin = 9999999.0f;
+	double bestEMin = 9999999.0f; //this should ONLY be accessed/modified using the synchronized methods below
+	double bestEUnMin = 9999999.0f;
 		// the best minimized and unminimized energy found thus far
 	BigInteger numConfsTotal = new BigInteger("0");
 		// the number of total conformations for the current configuration
@@ -253,7 +262,7 @@ public class RotamerSearch implements Serializable
 		//  evaluation
 		// Note that numConfsPrunedByE + numConfsPrunedByS + numConfsEvaluated
 		//  should equal the total number of conformations
-	float KSepsilon = 0.03f;
+	double KSepsilon = 0.03;
 		// the accuracy for computing energies for K*
 		// a value of 0.03 means the energies computed
 		//  will allow for a calculation of K*_approx
@@ -272,18 +281,33 @@ public class RotamerSearch implements Serializable
 	int numberMutable = 0;
 
 	boolean isTemplateOn = false;
-	
+
+        boolean minimizePairwise = true;//Minimize pairwise energies instead of minimizing energy of pair and subtracting out intra terms
+
+
+        //these thresholds will be used to detect steric clashes for intra+template
+        //and pairwise energies respectively, when we need to reject clashing voxels for the CETM and 
+        //pruning information isn't available (i.e. for K* before splitting into single-mutant calculations)
+        double pairSt = 100;
+        double templateSt = 30; 
+
+        
+        EPICSettings es = new EPICSettings();//turn off EPIC by default 
+        boolean compCETM = false;//Indicates we are currently computing EPIC fits
+        CETMatrix cetm = null;
+        
 	// Note that the mutation search functions in this class are relatively
 	//  messy as a result of changing the algorithms multiple times. They
 	//  could be rewritten to be much tighter and more elegant.
 
 	// the constructor if you also have a ligand
 	RotamerSearch(Molecule theMolec, int numMut,int strandsPresent, boolean hE, 
-			boolean hV, boolean hS, boolean addH, boolean conRes, float eps, 
-			float stericThresh, float softStericThresh,	boolean ddDielect, 
+			boolean hV, boolean hS, boolean addH, boolean conRes, double eps, 
+			double stericThresh, double softStericThresh,	boolean ddDielect, 
 			double dielectC, boolean doDihedral, boolean doSolv,double solvScFactor, 
 			double vdwMult, RotamerLibrary[] rotamerLibraries,
-                        boolean doPerts, String pFile, boolean minPerts, boolean useTrips, boolean flagsAStar) {
+                        boolean doPerts, String pFile, boolean minPerts, boolean useTrips, boolean flagsAStar,
+                        EPICSettings epics) {
 		
 		hElect = hE;
 		hVDW = hV;
@@ -317,13 +341,18 @@ public class RotamerSearch implements Serializable
 		
 		curAANum = new int[m.numberOfResidues]; //
 
+                if(minimizePairwise&&(!useCCD)){
+                    System.err.println("ERROR: Can't minimize only pairwise energies if not using CCD");
+                    System.exit(1);
+                }
+
                 if(doPerturbations){
                     simpMin = new PMinimizer(minimizePerturbations);
                     for(int i=0; i<numberOfStrands;i++){
 			strandRot[i] = new StrandRCs(rotamerLibraries[i],m.strand[i]);
                     }
                 }
-                else{
+                else{                    
                     simpMin = new SimpleMinimizer();
                     bbMin = new BBMinimizer();
                     brMin = new BackrubMinimizer();
@@ -332,7 +361,7 @@ public class RotamerSearch implements Serializable
                     }
                 }
 		
-		
+		es = epics;
 		//sysLR = new StrandRotamers(rl,m.strand[sysStrNum]);
 		/*if (ligStrNum>=0) { //there is a ligand
 			m.strand[ligStrNum].residue[0].flexible = true;
@@ -482,16 +511,16 @@ public class RotamerSearch implements Serializable
 		return tripleFlags;
 	}
 
-	public synchronized float getBestE(){
+	public synchronized double getBestE(){
 		return bestEMin;
 	}
 	
-	public synchronized void setBestE(float newBestE){
+	public synchronized void setBestE(double newBestE){
 		bestEMin = newBestE;
 	}
 	
 	//updates bestEMin only if (ue<bestEMin)
-	public synchronized void updateBestE(float ue){
+	public synchronized void updateBestE(double ue){
 		bestEMin = Math.min(bestEMin, ue);
 	}
 	
@@ -515,11 +544,11 @@ public class RotamerSearch implements Serializable
 	}
 
 	// This function computes one energy 
-	private float calcTotalSnapshotEnergy(){
+	private double calcTotalSnapshotEnergy(){
 		
 		double energyTerms[] = a96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
 	
-		return (float)energyTerms[0]; //the total energy is in energyTerms[0]
+		return (double)energyTerms[0]; //the total energy is in energyTerms[0]
 	}
 
 //// BEGIN CHECK_STERICS CODE SECTION
@@ -583,17 +612,28 @@ public class RotamerSearch implements Serializable
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(allRotamerPairsEnergyName));
 			if (minMatrix){
                             arpMatrix = new PairwiseEnergyMatrix();
-                            arpMatrix.eMatrix = (float [][][][][][])in.readObject();
+                            arpMatrix.eMatrix = (double [][][][][][])in.readObject();
                         }
 			else{
                             arpMatrixMax = new PairwiseEnergyMatrix();
-                            arpMatrixMax.eMatrix = (float [][][][][][])in.readObject();
+                            arpMatrixMax.eMatrix = (double [][][][][][])in.readObject();
                         }
 			in.close();
 		}
 		catch (Exception e){}		
 	}
-	
+
+
+        //Load a scaled level-set bound matrix
+        public void loadCETMatrix(String fileName) {
+		try{
+			ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName));
+			cetm = (CETMatrix)in.readObject();
+			in.close();
+		}
+		catch (Exception e){}
+	}
+
 	public PairwiseEnergyMatrix getMinMatrix(){
 		return arpMatrix;
 	}
@@ -606,7 +646,7 @@ public class RotamerSearch implements Serializable
 	//If doMinimize is true, then arpMatrixMax is also updated appropriately
 	//Adds the reference energies to the intra-energies in arpMatrix;
 	//If doMinimize is true, then arpMatrixMax is also updated appropriately
-	public void addEref(float eRef[][], boolean doMinimize, int strandMut[][]){
+	public void addEref(double eRef[][], boolean doMinimize, int strandMut[][]){
 		
 		int ind = 1; //skip the entry [0][0], since this is the fixed template energy
 		
@@ -632,13 +672,13 @@ public class RotamerSearch implements Serializable
 	// Computes the best energy (lower bound) using the arpMatrix
 	// This energy is rotamer based, that is it computes the best energy
 	//  for the current rotamer assignment of each amino-acid	
-	public float computeBestRotEnergyBound(/*int numTotalRotamers, int rotamerIndexOffset[]*/) {
+	public double computeBestRotEnergyBound(/*int numTotalRotamers, int rotamerIndexOffset[]*/) {
 
-		float bestE = arpMatrix.getShellShellE(); // Add shell-shell energy
-	
+		double bestE = arpMatrix.getShellShellE(); // Add shell-shell energy
+
 		for(int i=0;i<ASAANums.length;i++) {
 			bestE += arpMatrix.getIntraAndShellE(i, ASAANums[i], curStrRotNum[i]); //Add the intra-rotamer and shell energies for each rotamer
-			for(int j=i+1;j<ASAANums.length;j++){ // Add the pairwise energies
+                        for(int j=i+1;j<ASAANums.length;j++){ // Add the pairwise energies
 				bestE += arpMatrix.getPairwiseE( i, ASAANums[i], curStrRotNum[i], j, ASAANums[j], curStrRotNum[j] );
 			}
 		}
@@ -656,12 +696,12 @@ public class RotamerSearch implements Serializable
 	// Utilizes a number of helper functions
 	public int simpleMasterMutationSearch(int strandMut[][], int numMutable,
 		int theCurConfNum,
-		Set<OneMutation> mutArray, float minVol, float maxVol) {
+		Set<OneMutation> mutArray, double minVol, double maxVol) {
 
 		curConfNum = theCurConfNum;
 		
 		String curAAnames[] = new String[numMutable];
-		float rotamerVolumes[][][] = new float[strandMut.length][][];
+		double rotamerVolumes[][][] = new double[strandMut.length][][];
 		//TODO: rl.getRotVol will fail for non-amino acid rotamers
 		for(int str=0;str<strandMut.length;str++)
 			rotamerVolumes[str] = strandRot[str].rl.getRotVol();
@@ -679,8 +719,8 @@ public class RotamerSearch implements Serializable
 	//  decided not to so as to keep that function fast (ie. this way the
 	//  execution of a bunch of conditionals is saved in the normal search)
 	public void masterMutationSearchHelper(int depth, int maxDepth,
-		int strandMut[][], Set<OneMutation> mutSet, float minVol, float maxVol, String curAAnames[], 
-		float rotamerVolumes[][][]) {
+		int strandMut[][], Set<OneMutation> mutSet, double minVol, double maxVol, String curAAnames[], 
+		double rotamerVolumes[][][]) {
 	
 		if (depth >= maxDepth) {
 			// If we've arrived here then we're ready to
@@ -688,7 +728,7 @@ public class RotamerSearch implements Serializable
 			if(debug){
 				System.out.print(".");
 			}
-			float curVolume = 0.0f;
+			double curVolume = 0.0f;
 			for (int i=0; i<maxDepth; i++){
 				int str = mutRes2Strand[i];
 				curVolume += rotamerVolumes[str][strandRot[str].rl.getAARotamerIndex(curAAnames[i])][0]; //use the rotamer with index 0
@@ -767,68 +807,82 @@ public class RotamerSearch implements Serializable
 	// *Make sure that the forcefield types for the atoms in the
 	//  residue of interest have been computed prior to calling
 	//  this function as they are not computed in this function
-	private float computeEnergyOfOnlyRes(int molResNum, int pos, int[][] strandMut, Amber96ext resA96ff) {
-		//Get aa (int index) of the cur molResNum
-		int AAind = strandRot[m.residue[molResNum].strandNumber].rl.getAARotamerIndex(m.residue[molResNum].name);
-		
-		if(resA96ff == null){ //create the template amber FF if it's null
-			if(pos==0){
+	private double computeEnergyOfOnlyRes(int molResNum, int pos, int[][] strandMut, Amber96ext resA96ff) {
+            
+		if(resA96ff == null) //create the template amber FF if it's null
+                    resA96ff = initOnlyResEnergy(molResNum, pos, resA96ff);
+				
+		double energyTerms[] = resA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
+		double curEnergy = (double) energyTerms[0];
+			
+		return curEnergy;
+	}
+
+        private Amber96ext initOnlyResEnergy(int molResNum, int pos, Amber96ext resA96ff){
+
+                        if(pos==0){
 				res1A96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
-                resA96ff = res1A96ff;
-            }
-            else if(pos==1){
-            	res2A96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
-                resA96ff = res2A96ff;
-            }
-			
-			
+                                resA96ff = res1A96ff;
+                        }
+                        else if(pos==1){
+                                res2A96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
+                                resA96ff = res2A96ff;
+                        }
+
+
 			boolean savedEnergyEvalSC[] = new boolean[m.numberOfResidues];
 			boolean savedEnergyEvalBB[] = new boolean[m.numberOfResidues];
-				
+
 			// Save the energy eval flag, clear them at the same time
 			for(int i=0;i<m.numberOfResidues;i++){
 				savedEnergyEvalSC[i] = m.residue[i].getEnergyEvalSC();
 				savedEnergyEvalBB[i] = m.residue[i].getEnergyEvalBB();
 				m.residue[i].setEnergyEval(false, false);
 			}
-							
-            m.residue[molResNum].setEnergyEval(true, true);
-			
+
+                        m.residue[molResNum].setEnergyEval(true, true);
+
 			resA96ff.initializeCalculation();
 			resA96ff.setNBEval(hElect,hVDW);
-			
+
 			// Restore the energy eval and flexibility flags
 			for(int i=0;i<m.numberOfResidues;i++){
 				m.residue[i].setEnergyEval(savedEnergyEvalSC[i], savedEnergyEvalBB[i]);
 			}
-			
-		}
-				
-		double energyTerms[] = resA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float curEnergy = (float) energyTerms[0];
-			
-		return curEnergy;
-	}
+
+                        return resA96ff;
+        }
+
 	//Turns all template residues on and the side-chains for all flexible residues off;
 	//Computes the template energy for the current template; does not do minimization
 	// *Make sure that the forcefield types for the atoms in the
 	//  residue of interest have been computed prior to calling
 	//  this function as they are not computed in this function
-	private float computeEnergyOfOnlyTemplate(int strandMut[][]) {
-		if(templateA96ff == null){ //create the template amber FF if it's null
-			templateA96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
+	private double computeEnergyOfOnlyTemplate(int strandMut[][]) {
+		if(templateA96ff == null) //create the template amber FF if it's null
+			initTemplateEnergy(strandMut);
+		
+		double energyTerms[] = templateA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
+		double curEnergy = (double) energyTerms[0];
 			
+		return curEnergy;
+	}
+
+        private void initTemplateEnergy(int strandMut[][]){
+
+                        templateA96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
+
 			boolean savedEnergyEvalSC[] = new boolean[m.numberOfResidues];
 			boolean savedEnergyEvalBB[] = new boolean[m.numberOfResidues];
-			
-				
+
+
 			// Save the energy eval flag, clear them at the same time
 			for(int i=0;i<m.numberOfResidues;i++){
 				savedEnergyEvalSC[i] = m.residue[i].getEnergyEvalSC();
 				savedEnergyEvalBB[i] = m.residue[i].getEnergyEvalBB();
 				m.residue[i].setEnergyEval(true, true);
 			}
-							
+
 			//Clear the energy evaluation flags for the AS residues and the ligand (if present), so that
 			//		the energies only between template residues are computed
 			for (int str=0; str<strandMut.length;str++){
@@ -839,22 +893,16 @@ public class RotamerSearch implements Serializable
 						m.strand[str].residue[strandMut[str][i]].setEnergyEval(false, false);
 				}
 			}
-			
+
 			templateA96ff.initializeCalculation();
 			templateA96ff.setNBEval(hElect,hVDW);
-			
+
 			// Restore the energy eval and flexibility flags
 			for(int i=0;i<m.numberOfResidues;i++){
 				m.residue[i].setEnergyEval(savedEnergyEvalSC[i], savedEnergyEvalBB[i]);
 			}
-			
-		}
-		
-		double energyTerms[] = templateA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float curEnergy = (float) energyTerms[0];
-			
-		return curEnergy;
-	}
+        }
+
 	
 	public void setTemplateOff(int[][] strandMut, int res1, int res2, boolean shellRun, boolean templateOnly){
 		templateOffA96ff = new Amber96ext(m, distDepDielect, dielectConst, doSolvationE, solvScale, vdwMultiplier);
@@ -934,14 +982,19 @@ public class RotamerSearch implements Serializable
 	public void simplePairwiseMutationAllRotamerSearch(int strandMut[][], int mutableSpots, 
 			boolean searchDoMinimize, boolean shellRun, boolean intraRun, 
 			int residueMutatable[], PairwiseEnergyMatrix retEMatrixMin, PairwiseEnergyMatrix retEMatrixMax,
-			boolean minimizeBB, boolean doBackrubs, boolean templateOnly, String backrubFile, boolean templateAlwaysOn) {
+			boolean minimizeBB, boolean doBackrubs, boolean templateOnly, String backrubFile, boolean templateAlwaysOn,
+                        String strandDefault[][], boolean doCompCETM) {
+            //If doCompCETM is true we are computing a continuous energy term matrix; otherwise we're computing the min/max pairwise energy matrices
 
+                compCETM = doCompCETM;
 
 		doMinimization = searchDoMinimize;
 		computeEVEnergy = true;
 
                 if(doPerturbations)
                     ((PMinimizer)simpMin).minimizePerturbations=minimizePerturbations;//This field needs to be set properly when this function is called
+                if(useCCD)//Need a list of degrees of freedom to use the CCD minimizer
+                    m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, strandDefault);
 
 		// Prepare Amber
 		if(computeEVEnergy){
@@ -1030,7 +1083,7 @@ public class RotamerSearch implements Serializable
                                    if( m.perts[0].type.equalsIgnoreCase("FULL STRUCTURE SWITCH") ){
                                        
                                         int numTemplates = ((FullStructureSwitch)m.perts[0]).numStructs;
-                                        switchedTemplateE = new float[numTemplates];
+                                        switchedTemplateE = new double[numTemplates];
 
                                         for(int tempNum=0; tempNum<numTemplates; tempNum++){
 
@@ -1044,7 +1097,7 @@ public class RotamerSearch implements Serializable
                                             a96ff.calculateTypesWithTemplates();
                                             a96ff.initializeCalculation();
                                             a96ff.setNBEval(hElect,hVDW);
-                                            float minE = calcTotalSnapshotEnergy();
+                                            double minE = calcTotalSnapshotEnergy();
 
                                             if(tempNum==0){
                                                 retEMatrixMin.setShellShellE(minE);
@@ -1075,7 +1128,7 @@ public class RotamerSearch implements Serializable
 					a96ff.initializeCalculation();
 					a96ff.setNBEval(hElect,hVDW);
 					
-					float minE = calcTotalSnapshotEnergy();
+					double minE = calcTotalSnapshotEnergy();
 					retEMatrixMin.setShellShellE( minE );
 					retEMatrixMax.setShellShellE( minE );
 				}
@@ -1104,11 +1157,11 @@ public class RotamerSearch implements Serializable
 					
 					simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
 
-					float beginE = computeEnergyOfOnlyTemplate(strandMut);//calcTotalSnapshotEnergy();
+					double beginE = computeEnergyOfOnlyTemplate(strandMut);//calcTotalSnapshotEnergy();
 					simpMin.minimize(35);
-					float curE = computeEnergyOfOnlyTemplate(strandMut); //calcTotalSnapshotEnergy();
+					double curE = computeEnergyOfOnlyTemplate(strandMut); //calcTotalSnapshotEnergy();
 					
-					float minE = Math.min(beginE, curE);
+					double minE = Math.min(beginE, curE);
 					
 					retEMatrixMin.setShellShellE(minE);
 					retEMatrixMax.setShellShellE(minE);
@@ -1167,12 +1220,19 @@ public class RotamerSearch implements Serializable
 			// Note: In this search we only search over the key active site  residues rather than all residues in the molecule, 
 			//		thus maxDepth should be numInAS
 			initMutRes2Str(strandMut);
-						
+
+                        if(compCETM)
+                            cetm = new CETMatrix(mutableSpots,strandMut,this);
+				
 			pairwiseEnergyComp (mutableSpots, strandMut, residueMutatable, retEMatrixMin, retEMatrixMax, shellRun, minimizeBB, doBackrubs, backrubFile);
 
                         if( ( switchedTemplateE != null ) && ( residueMutatable[0] != 0 ) )//This transfers energies from template changes in full structure switch perturbations to the first residue shell energies
                             correctSwitchedTemplates(strandMut, retEMatrixMin, retEMatrixMax);
 
+                        //this is now obsolete because we have CETMatrix.tryMolecCompression
+                        //if(compCETM)
+                        //    cetm.cleanupSVE();
+                        
 			return;
 		}
 	}
@@ -1347,10 +1407,10 @@ public class RotamerSearch implements Serializable
 			PairwiseEnergyMatrix retEMatrixMin, PairwiseEnergyMatrix retEMatrixMax,
 			int strandMut[][], boolean minimizeBB, boolean doBackrubs){
 		
-		float curEnergy = 0.0f;	
-		float beginE = 0.0f;
-		float minEnergy = (float)Math.pow(10,30);
-		float maxEnergy = -(float)Math.pow(10,30);
+		double curEnergy = 0.0f;	
+		double beginE = 0.0f;
+		double minEnergy = (double)Math.pow(10,30);
+		double maxEnergy = -(double)Math.pow(10,30);
 		
 		//Compute min and max energies
 		if ( doMinimization ){								
@@ -1372,8 +1432,8 @@ public class RotamerSearch implements Serializable
 				//Compare to the min and max energies found so far and update, if necessary
 				if (beginE<curEnergy)
 					curEnergy = beginE;
-				float lE = Math.min(beginE, curEnergy);
-				float hE = Math.max(beginE, curEnergy);
+				double lE = Math.min(beginE, curEnergy);
+				double hE = Math.max(beginE, curEnergy);
 				minEnergy = Math.min(minEnergy,lE);									
 				maxEnergy = Math.max(maxEnergy,hE);
 
@@ -1405,14 +1465,14 @@ public class RotamerSearch implements Serializable
 				}
 				
 				//get the CA-C bond
-				float dx = m.actualCoordinates[at[1]*3] - m.actualCoordinates[at[0]*3];
-				float dy = m.actualCoordinates[at[1]*3+1] - m.actualCoordinates[at[0]*3+1];
-				float dz = m.actualCoordinates[at[1]*3+2] - m.actualCoordinates[at[0]*3+2];
+				double dx = m.actualCoordinates[at[1]*3] - m.actualCoordinates[at[0]*3];
+				double dy = m.actualCoordinates[at[1]*3+1] - m.actualCoordinates[at[0]*3+1];
+				double dz = m.actualCoordinates[at[1]*3+2] - m.actualCoordinates[at[0]*3+2];
 				
 				//get the N-CA bond
-				float dxH = m.actualCoordinates[at[0]*3] - m.actualCoordinates[at[3]*3];
-				float dyH = m.actualCoordinates[at[0]*3+1] - m.actualCoordinates[at[3]*3+1];
-				float dzH = m.actualCoordinates[at[0]*3+2] - m.actualCoordinates[at[3]*3+2];
+				double dxH = m.actualCoordinates[at[0]*3] - m.actualCoordinates[at[3]*3];
+				double dyH = m.actualCoordinates[at[0]*3+1] - m.actualCoordinates[at[3]*3+1];
+				double dzH = m.actualCoordinates[at[0]*3+2] - m.actualCoordinates[at[3]*3+2];
 				
 				//get the center of rotation for O (the actualCoordinates[] of C)
 				double center[] = new double[3];
@@ -1426,18 +1486,18 @@ public class RotamerSearch implements Serializable
 				centerH[1] = m.actualCoordinates[at[3]*3+1];
 				centerH[2] = m.actualCoordinates[at[3]*3+2];
 				
-				float rotForInitPos = bbMin.getMaxDihedRot(); //get the max phi/psi rotation
+				double rotForInitPos = bbMin.getMaxDihedRot(); //get the max phi/psi rotation
 				
 				//Do the sampling and minimization
 				for (int curSample=0; curSample<samplesBB; curSample++){
 				
 					//randomly generate the rotation angle
-					float rotChange[] = new float[2];
+					double rotChange[] = new double[2];
 					Random randNum = new Random();
 					
 					if (curSample!=0) {
 						for (int i=0; i<2; i++)
-							rotChange[i] = (randNum.nextFloat()-0.5f)*rotForInitPos*2.0f;
+							rotChange[i] = (randNum.nextDouble()-0.5f)*rotForInitPos*2.0f;
 					}
 					else {
 						for (int i=0; i<2; i++)
@@ -1466,9 +1526,9 @@ public class RotamerSearch implements Serializable
 			else { //backrub minimization
 				if (curPos>=0){ //not the ligand
 					beginE = calcTotalSnapshotEnergy();
-					float e[] = brMin.getMinMaxIntraEnergyBR(curPos);
-					float lE = Math.min(beginE, e[0]);
-					float hE = Math.min(beginE, e[1]);
+					double e[] = brMin.getMinMaxIntraEnergyBR(curPos);
+					double lE = Math.min(beginE, e[0]);
+					double hE = Math.min(beginE, e[1]);
 					minEnergy = Math.min(minEnergy,lE);									
 					maxEnergy = Math.max(maxEnergy,hE);
 				}
@@ -1589,38 +1649,8 @@ public class RotamerSearch implements Serializable
 			int mutDepth[], int curMut, String backrubFile){
 		
 		if (curMut>=numMut){// If we've arrived here, then we have assigned a full amino acid sequence and we are ready to generate all rotamer combinations
-			
-			if(debug){
-				System.out.print(".");
-			}
-			if (computeEVEnergy){
-				a96ff.calculateTypesWithTemplates();
-				a96ff.initializeCalculation();
-				a96ff.setNBEval(hElect,hVDW);
 
-                //Residue got mutated so molecule indices changed and we need to reset the saved AmberFF
-                //KER: if we had a molecule that didn't have indices changed we could store AmberFF terms
-                templateA96ff = null;
-                res1A96ff = null;
-                res2A96ff = null;
-                
-                setTemplateOff(strandMut,mutDepth[0],mutDepth[1],shellRun,false);
-                
-				if (doMinimization){
-					if (!minimizeBB){ //side-chain minimization
-						simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
-					}
-					else { //backbone minimization
-						if (!doBackrubs){
-							bbMin.initialize(m, a96ff, strandMut, numberOfStrands);
-						}
-						else {
-							brMin.initialize(m, a96ff, strandMut, backrubFile, hSteric, overlapThresh, numberOfStrands,true);
-						}
-					}
-				}
-			}
-			int res1 = -1, res2 = -1;
+                    	int res1 = -1, res2 = -1;
 			for(int i=0;i<maxDepth;i++){
 				if (residueMutatable[i]==1) {
 					if (res1 == -1)
@@ -1628,6 +1658,105 @@ public class RotamerSearch implements Serializable
 					else
 						res2 = i;
 				}
+			}
+
+
+
+			if(debug){
+				System.out.print(".");
+			}
+			if (computeEVEnergy){
+                            a96ff.calculateTypesWithTemplates();
+                            a96ff.initializeCalculation();
+                            a96ff.setNBEval(hElect,hVDW);
+
+                            //Residue got mutated so molecule indices changed and we need to reset the saved AmberFF
+                            //KER: if we had a molecule that didn't have indices changed we could store AmberFF terms
+                            templateA96ff = null;
+                            res1A96ff = null;
+                            res2A96ff = null;
+
+                            setTemplateOff(strandMut,mutDepth[0],mutDepth[1],shellRun,false);
+
+                            if (doMinimization){
+                                if (!minimizeBB){ //side-chain minimization
+                                        if(useCCD){
+
+                                            if(minimizePairwise){
+
+                                                //Set up energy function to minimize
+                                                EnergyFunction mainEF[] = { new ForceFieldEnergy(m, templateOffA96ff) };
+                                                EnergyFunction negEFs[] = null;
+
+                                                if(shellRun){//Need to subtract off template energy
+                                                    //initialize templateA96ff
+                                                    initTemplateEnergy(strandMut);
+                                                    negEFs = new EnergyFunction[] { new ForceFieldEnergy(m, templateA96ff) };
+                                                }
+
+                                                else{//Need to subtract off intra energies
+                                                    //Initialize res1A96ff, res2A96ff
+                                                    int res1Strand = mutRes2Strand[res1];
+                                                    int res1Resnum = strandMut[res1Strand][mutRes2StrandMutIndex[res1]];
+                                                    int res2Strand = mutRes2Strand[res2];
+                                                    int res2Resnum = strandMut[res2Strand][mutRes2StrandMutIndex[res2]];
+
+                                                    initOnlyResEnergy(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,res1A96ff);
+                                                    initOnlyResEnergy(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,res2A96ff);
+
+                                                    negEFs = new EnergyFunction[] { new ForceFieldEnergy(m, res1A96ff) ,
+                                                        new ForceFieldEnergy(m, res2A96ff) };
+                                                }
+
+                                                //ef = mainEF - negEFs
+                                                efunc = new MultiTermEnergyFunction(mainEF,negEFs);
+                                            }
+                                            else
+                                                efunc = new ForceFieldEnergy(m, a96ff);
+
+
+                                            boolean transRotStrands[] = new boolean[m.numberOfStrands];
+                                            //If the strand containing res1 can translate and rotate, let it do so
+                                            if(res1!=-1){
+                                                int res1Strand = mutRes2Strand[res1];
+                                                if(m.strand[res1Strand].rotTrans)
+                                                    transRotStrands[res1Strand] = true;
+                                            }
+                                            if(res2!=-1){
+                                                int res2Strand = mutRes2Strand[res2];
+                                                if(m.strand[res2Strand].rotTrans)
+                                                    transRotStrands[res2Strand] = true;
+                                            }
+
+                                            if(shellRun){
+                                                //If any strand that can rotate & translate contains part of the template,
+                                                //let is rotate and translate
+                                                for(int str=0; str<m.numberOfStrands; str++){
+                                                    if(m.strand[str].rotTrans){
+                                                        if( m.strand[str].numberOfResidues > strandMut[str].length )//strand has template residues
+                                                            transRotStrands[str] = true;
+                                                    }
+                                                }
+                                            }
+
+
+
+                                            ContSCObjFunction of = new ContSCObjFunction(m,numberOfStrands,efunc,strandRot,curAANum,(doDihedE&&shellRun),transRotStrands);
+                                            efunc = of.efunc;//ef will now include dihedral energies if we need them (i.e. if doDihedE && shellRun)
+                                            ccdMin = new CCDMinimizer(of,true);
+                                        }
+                                        else
+                                            simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
+                                }
+                                else { //backbone minimization
+                                        if (!doBackrubs){
+                                                bbMin.initialize(m, a96ff, strandMut, numberOfStrands);
+                                        }
+                                        else {
+                                                brMin.initialize(m, a96ff, strandMut, backrubFile, hSteric, overlapThresh, numberOfStrands,true);
+                                        }
+                                }
+                            }
 			}
 			
 			/*if (ligPresent){
@@ -1770,8 +1899,8 @@ public class RotamerSearch implements Serializable
                                         }
 
                                         if( !validConf ){
-                                            retEMatrixMin.setShellRotE( res1, res1AANum, res1RotNum, Float.POSITIVE_INFINITY );
-                                            retEMatrixMax.setShellRotE( res1, res1AANum, res1RotNum, Float.POSITIVE_INFINITY );
+                                            retEMatrixMin.setShellRotE( res1, res1AANum, res1RotNum, Double.POSITIVE_INFINITY );
+                                            retEMatrixMax.setShellRotE( res1, res1AANum, res1RotNum, Double.POSITIVE_INFINITY );
                                             return;
                                         }
                                     }
@@ -1800,8 +1929,8 @@ public class RotamerSearch implements Serializable
 
 
                                         if(incompatible){
-                                            retEMatrixMin.setPairwiseE(res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, Float.POSITIVE_INFINITY);
-                                            retEMatrixMax.setPairwiseE(res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, Float.POSITIVE_INFINITY);
+                                            retEMatrixMin.setPairwiseE(res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, Double.POSITIVE_INFINITY);
+                                            retEMatrixMax.setPairwiseE(res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, Double.POSITIVE_INFINITY);
                                             return;
                                         }
                                     }
@@ -1840,7 +1969,10 @@ public class RotamerSearch implements Serializable
 					
 					if (doMinimization){
 						if (!minimizeBB){ //side-chain minimization
-							pairwiseRotamerEnergySidechainHelper (res1,res2,res1Strand,res1Resnum,res2Strand,res2Resnum,strandMut,
+                                                        //We need this computation for the normal pairwise energy matrices and for unpruned RCs or pairs in the continuous energy matrix
+                                                        boolean needE = checkNeedE(res1,res1AANum,res1RotNum,res2,res2AANum,res2RotNum);
+							if(needE)
+                                                            pairwiseRotamerEnergySidechainHelper (res1,res2,res1Strand,res1Resnum,res2Strand,res2Resnum,strandMut,
 									shellRun, retEMatrixMin, retEMatrixMax, res1AANum, res1RotNum, res2AANum, res2RotNum);
 						}
 						else { //backbone minimization
@@ -1858,11 +1990,11 @@ public class RotamerSearch implements Serializable
 						/*a96ff.initializeCalculation();
 						a96ff.setNBEval(hElect,hVDW);*/
 						double energyTerms[] = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-						float curEnergy = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+						double curEnergy = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 						
 						if(!shellRun){
 							//Remove the intra-residue energies here
-							float tmpE = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
+							double tmpE = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
 							curEnergy -= tmpE;
 							
 							tmpE = computeEnergyOfOnlyRes(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,strandMut,res2A96ff);
@@ -1962,66 +2094,106 @@ public class RotamerSearch implements Serializable
 		//a96ff.initializeCalculation();
 		//a96ff.setNBEval(hElect,hVDW);
 		
-		float minEnergy = (float)Math.pow(10,30);
-		float maxEnergy = -(float)Math.pow(10,30);
+		double minEnergy = (double)Math.pow(10,30);
+		double maxEnergy = -(double)Math.pow(10,30);
 		
-		float curEnergy = 0.0f;
-		float beginE = 0.0f;
-		
-		
-		/////////////////////////////
-		//formally making sure that when minimization is performed,
-		//		the minimized value is never greater than the initial value
-		double energyTerms[] = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		beginE = (float)energyTerms[0];//calcTotalSnapshotEnergy();
-		
-		//KER: Include intra res with shell energy so we don't subtract off the first residue energy for the
-		//KER: shell run
-		if (!shellRun) {
-			//Remove the intra-residue energies here
-			float tmpE1 = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
-			beginE -= tmpE1;
-			
-			tmpE1 = computeEnergyOfOnlyRes(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,strandMut,res2A96ff);
-			beginE -= tmpE1;
-		}
-		else {
-			// If this is a shell run then subtract off the shell-to-shell
-			//  interaction energies so that they are not over counted
-			beginE -= computeEnergyOfOnlyTemplate(strandMut);
-		}
-		/////////////////////////////
+		double curEnergy = 0.0f;
+		double beginE = 0.0f;
 
-		//Minimize
-		simpMin.minimize(numMinSteps); 
-		
-		energyTerms = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		curEnergy = (float)energyTerms[0];//calcTotalSnapshotEnergy();
-		
-		if (!shellRun) {
-			//Remove the intra-residue energies here
-			float tmpE2 = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
-			curEnergy -= tmpE2;
-			
-			tmpE2 = computeEnergyOfOnlyRes(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,strandMut,res2A96ff);
-			curEnergy -= tmpE2;
-		}
-		else {
-			// If this is a shell run then subtract off the shell-to-shell
-			//  interaction energies so that they are not over counted
-			curEnergy -= computeEnergyOfOnlyTemplate(strandMut);
-			
-			if (doDihedE) //add dihedral energies
-				curEnergy += simpMin.computeDihedEnergy();
-		}
+
+                if(useCCD)//The molecule has ideal values for the dihedrals now; record these
+                    ((ContSCObjFunction)ccdMin.objFcn).updateIdealDihedrals();
+
+
+                if(minimizePairwise){//ef will be the total energy we are minimizing (e.g. pairwise = pair energy - intra energies)
+
+                    beginE = (double)efunc.getEnergy();
+                    ccdMin.minimize();
+                    curEnergy = (double)efunc.getEnergy();
+
+                    if(compCETM){
+
+                        boolean stericsOK = true;
+                        if(eliminatedRotAtRes==null){
+                            //no pruning information
+                            //so we'll do an extra steric check here instead
+                            if(res2==-1){
+                                if( curEnergy >= templateSt )
+                                    stericsOK = false;
+                            }
+                            else if( curEnergy >= pairSt  )
+                                stericsOK = false;
+                        }
+
+
+                        if(stericsOK)
+                            compEPICFit( res1Strand, res1Resnum, res1, res1AANum, res1RotNum,
+                                    res2Strand, res2Resnum, res2, res2AANum, res2RotNum, curEnergy, beginE, shellRun );
+                    }
+                }
+                else{
+                    /////////////////////////////
+                    //formally making sure that when minimization is performed,
+                    //		the minimized value is never greater than the initial value
+                    double energyTerms[] = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
+                    beginE = (double)energyTerms[0];//calcTotalSnapshotEnergy();
+
+                    //KER: Include intra res with shell energy so we don't subtract off the first residue energy for the
+                    //KER: shell run
+                    if (!shellRun) {
+                            //Remove the intra-residue energies here
+                            double tmpE1 = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
+                            beginE -= tmpE1;
+
+                            tmpE1 = computeEnergyOfOnlyRes(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,strandMut,res2A96ff);
+                            beginE -= tmpE1;
+                    }
+                    else {
+                            // If this is a shell run then subtract off the shell-to-shell
+                            //  interaction energies so that they are not over counted
+                            beginE -= computeEnergyOfOnlyTemplate(strandMut);
+                    }
+                    /////////////////////////////
+
+                    //Minimize
+                    if(useCCD)
+                        ccdMin.minimize();
+                    else
+                        simpMin.minimize(numMinSteps);
+
+                    energyTerms = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
+                    curEnergy = (double)energyTerms[0];//calcTotalSnapshotEnergy();
+
+                    if (!shellRun) {
+                            //Remove the intra-residue energies here
+                            double tmpE2 = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
+                            curEnergy -= tmpE2;
+
+                            tmpE2 = computeEnergyOfOnlyRes(m.strand[res2Strand].residue[res2Resnum].moleculeResidueNumber,1,strandMut,res2A96ff);
+                            curEnergy -= tmpE2;
+                    }
+                    else {
+                            // If this is a shell run then subtract off the shell-to-shell
+                            //  interaction energies so that they are not over counted
+                            curEnergy -= computeEnergyOfOnlyTemplate(strandMut);
+
+                            if (doDihedE){ //add dihedral energies
+                                if(useCCD)
+                                    curEnergy += ((ContSCObjFunction)ccdMin.objFcn).de.getEnergy();
+                                else
+                                    curEnergy += simpMin.computeDihedEnergy();
+                            }
+                    }
+                }
 		/////////////////////////////
 
 		//Compare to the min and max energies found so far and update, if necessary
+                //With the dihedral energies included during minimization this is unnecessary
 		if(doDihedE){
 			if (beginE<curEnergy)
 				curEnergy = beginE;
-			float lE = Math.min(beginE, curEnergy);
-			float hE = Math.max(beginE, curEnergy);
+			double lE = Math.min(beginE, curEnergy);
+			double hE = Math.max(beginE, curEnergy);
 		}
 		minEnergy = Math.min(minEnergy,curEnergy);
 		maxEnergy = Math.max(maxEnergy,beginE);		
@@ -2042,6 +2214,232 @@ public class RotamerSearch implements Serializable
 		
 		return;
 	}
+
+        private boolean checkNeedE( int res1, int res1AANum, int res1RotNum, int res2, int res2AANum, int res2RotNum ){
+            //Returns if we need to compute the given shell or pairwise energy
+            if(!compCETM)//Need all energies for normal energy matrices
+                return true;
+            
+            
+            if (eliminatedRotAtRes == null){//no pruning, so try to compute everything
+                //(we'll do an extra steric check in pairwiseRotamerEnergySidechainHelper in this case)s
+                return true;
+            }
+            
+            
+            //Now check that the RC(s) and, if applicable, pair are not pruned
+            //If compCETM then we should have eliminatedRotAtRes and splitFlags available
+            if( eliminatedRotAtRes.get(res1,res1AANum,res1RotNum) )
+                return false;
+
+            if(res2!=-1){//Pairwise energy
+                if( eliminatedRotAtRes.get(res2,res2AANum,res2RotNum) )
+                    return false;
+                if(compCETM && splitFlags!=null) {
+                    //if we've done pairs pruning and are considering CET computation
+                    if( splitFlags[res1][res1AANum][res1RotNum][res2][res2AANum][res2RotNum] )
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        
+        
+        private void compEPICFit(int str1, int strResNum1, int res1, int res1AANum, int res1RotNum, int str2,
+                int strResNum2, int res2, int res2AANum, int res2RotNum, double curEnergy, double beginE, boolean shellRun){
+            //Do the EPIC series fits for this rotamer pair
+
+            
+            ContSCObjFunction of = (ContSCObjFunction)ccdMin.objFcn;
+            DoubleMatrix1D startVec = of.curDOFVals.copy();
+            
+            double baseE = of.getValue(startVec);
+            
+            
+            EPICFitter fitter = new EPICFitter(ccdMin,es,startVec,baseE);
+            
+            EPoly bestSer = null;
+            
+            if(ccdMin.numDOFs>0){//need to actually compute polynomial fits
+                
+                //baseE should match curEnergy
+                //(difference in calculations is efunc.getEnergy(0) vs. getEnergy()--should agree 
+                //for all pairwise or shell E's, unless no flexibility and thus partial energy doesn't include
+                //the residue or pair of interest)
+                if(Math.abs(baseE-curEnergy)>0.001){
+                    System.out.println("Warning: baseE="+baseE+" but curEnergy="+curEnergy+" in RotamerSearch.compEPICFit!");
+                }
+                
+                FitParams curFitParams = FitParams.quadratic(of.getNumDOFs(),false);
+                double bestResid = Double.POSITIVE_INFINITY;
+                int bestBound = -1;
+                ArrayList<EPoly> series = new ArrayList<>();//list of fit series
+                                
+                for( int boundCount=0; bestResid>es.EPICGoalResid && curFitParams!=null; boundCount++ ){
+                    
+                    System.out.println("FIT NUMBER "+boundCount+": "+curFitParams.getDescription());
+                    EPoly curSeries = fitter.doFit(curFitParams);
+                    double meanResid = fitter.crossValidateSeries(curSeries,curFitParams);
+                    series.add(curSeries);
+                    
+                    if( curFitParams.order==2 && curFitParams.explicitVDWCutoff==0 )//pure quadratic--to use as template for PCs
+                        fitter.PCTemplate = curSeries;
+                    
+                    if(meanResid<bestResid){
+                        bestResid = meanResid;
+                        bestBound = boundCount;
+                    }
+                    
+                    curFitParams = fitter.raiseFitOrder(curFitParams);
+                }
+                
+                if(bestResid > es.EPICGoalResid){
+                    System.out.println("Failed to reach goal residual.");
+                }
+                System.out.println("Best residual: "+bestResid+" for bound number "+bestBound);
+
+
+
+
+                int numDOFs = fitter.numDOFs;
+
+                //TESTING FITS
+                System.out.println("ROT:"+res1+" "+res1AANum+" "+res1RotNum+" "+res2+" "+res2AANum+" "+res2RotNum);
+                System.out.println("curEnergy: "+curEnergy +" beginE: "+beginE);
+
+                double testScales[] = new double[] { 0.01, 0.5, 5, 100 };//100
+                int samplesPerScale = 3;
+
+
+
+                double relMax[] = new double[numDOFs];//maximum shifts of degrees of freedom relative to minimum point (startVec)
+                double relMin[] = new double[numDOFs];
+                for(int dof=0; dof<numDOFs; dof++){
+                    relMax[dof] = ccdMin.DOFmax.get(dof) - startVec.get(dof);
+                    relMin[dof] = ccdMin.DOFmin.get(dof) - startVec.get(dof);
+                }
+
+
+                for(double scale : testScales){
+                    for(int s=0; s<samplesPerScale; s++){
+
+                        //Generate vector relative to minimum
+                        double dx[] = new double[numDOFs];
+                        //and absolute
+                        DoubleMatrix1D sampAbs = DoubleFactory1D.dense.make(numDOFs);
+                        for(int dof=0; dof<numDOFs; dof++){
+                            double top = Math.min(relMax[dof], scale);
+                            double bottom = Math.max(relMin[dof], -scale);
+                            dx[dof] = bottom + Math.random()*(top-bottom);
+                            sampAbs.set(dof, startVec.get(dof)+dx[dof]);
+                        }
+
+                        double trueVal = of.getValue(sampAbs) - baseE;
+
+                        System.out.print("TEST: S="+scale+" dx=");
+                        for(int dof=0; dof<numDOFs; dof++)
+                            System.out.print(dx[dof]+" ");
+
+                        System.out.print("TRUE="+trueVal+" SER=");
+
+                        for(EPoly b : series){
+                            if(b!=null)
+                                System.out.print(b.evaluate(sampAbs,false)+" ");
+                        }
+
+                        System.out.println();
+                    }
+                }
+
+                bestSer = series.get(bestBound);
+            }
+            else
+                bestSer = fitter.blank();
+
+            bestSer.minE = curEnergy;//store voxel-minimum energy.  curEnergy not baseE (which =0 w/o flexibility)
+            storeDiscreteDOFs(res1,res1AANum,res2,res2AANum,bestSer);
+
+            if (shellRun)
+                    cetm.setShellRotE(res1, res1AANum, res1RotNum, bestSer);
+            else
+                    cetm.setPairwiseE( res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, bestSer );    
+        }
+        
+        
+        
+        private void storeDiscreteDOFs(int res1, int res1AANum, int res2, int res2AANum, EPoly bestSer){
+            //Store discrete DOFs in a continuous energy matrix
+            //We know that res1 and res2 (if not -1) are in RC-assigned states
+            //so we store the values of discrete DOFs affecting them
+            //(for sequence we do mutation rather than AA type DOFs though)
+            //(so the discrete DOFs can be either perturbations or mutations)
+            bestSer.discreteDOFNums = new ArrayList<>();
+            bestSer.discreteDOFVals = new ArrayList<>();
+            
+            for(DegreeOfFreedom dof : m.DOFs){
+                if( arrayContains( dof.flexResAffected, res1 )
+                        || arrayContains( dof.flexResAffected, res2 ) ){
+                    
+                    if(dof.type==DegreeOfFreedom.PERTURBATION){
+                        if(!dof.isContinuous()){//this is the opposite of the condition for inclusion in a ContSCObjFunction...
+                            bestSer.discreteDOFNums.add(dof.DOFNum);
+                            bestSer.discreteDOFVals.add(dof.pert.curParam);
+                        }
+                    }
+                    else if(dof.type==DegreeOfFreedom.MUTATION){
+                        //always discrete
+                        bestSer.discreteDOFNums.add(dof.DOFNum);
+
+                        //see if the mutation is active, record value accordingly
+                        if(  ( dof.flexResAffected[0]==res1 && res1AANum==dof.mutAANum )
+                                || ( dof.flexResAffected[0]==res2 && res2AANum==dof.mutAANum ) ){
+
+                            bestSer.discreteDOFVals.add(1.);
+                        }
+                        else
+                            bestSer.discreteDOFVals.add(0.);
+                    }
+                }
+            }
+        }
+
+
+        public static boolean arrayContains(int[] a, int b){//Does a contain b?
+            for(int ae : a){
+                if( b == ae )
+                    return true;
+            }
+            return false;
+        }
+        
+
+        //Adjusting one or a few elements of a vector
+        //(functions made for numerical differentiation)
+        public static DoubleMatrix1D adjustVec(DoubleMatrix1D a, int b, double c){
+            DoubleMatrix1D ans = a.copy();
+            ans.set( b, ans.get(b) + c );
+            return ans;
+        }
+
+        public static DoubleMatrix1D adjustVec(DoubleMatrix1D a, int b1, double c1, int b2, double c2){
+            DoubleMatrix1D ans = a.copy();
+            ans.set( b1, ans.get(b1) + c1 );
+            ans.set( b2, ans.get(b2) + c2 );
+            return ans;
+        }
+
+        public static DoubleMatrix1D adjustVec(DoubleMatrix1D a, int b1, double c1, int b2, double c2, int b3, double c3){
+            DoubleMatrix1D ans = a.copy();
+            ans.set( b1, ans.get(b1) + c1 );
+            ans.set( b2, ans.get(b2) + c2 );
+            ans.set( b3, ans.get(b3) + c3 );
+            return ans;
+        }
+
+
+
 	//This method helps compute energy bounds for a given pair of rotamers for backbone phi/psi minimization
 	//Called by pairwiseMutationRotamerSearch(.)
 	private void pairwiseRotamerEnergyBackboneHelper (int res1,int res2,int res1Strand,int res1Resnum,int res2Strand,int res2Resnum,int strandMut[][],
@@ -2052,26 +2450,26 @@ public class RotamerSearch implements Serializable
 		a96ff.initializeCalculation();
 		a96ff.setNBEval(hElect,hVDW);
 	
-		float minEnergy = (float)Math.pow(10,30);
-		float maxEnergy = -(float)Math.pow(10,30);
+		double minEnergy = (double)Math.pow(10,30);
+		double maxEnergy = -(double)Math.pow(10,30);
 			
-		float beginE = 0.0f;
+		double beginE = 0.0f;
 		
 		double energyTerms[] = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		beginE = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+		beginE = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 		beginE -= removeExtraE(templateOnly, res1Strand, res1Resnum, res2Strand, res2Resnum, strandMut);
 		
 		bbMin.minimizeFull(true); //minimize
 		
 		energyTerms = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float curEnergy = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+		double curEnergy = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 		curEnergy -= removeExtraE(templateOnly, res1Strand, res1Resnum, res2Strand, res2Resnum, strandMut);
 		
 		
 		if (beginE<curEnergy)
 			curEnergy = beginE;
-		float lE = Math.min(beginE, curEnergy);
-		float hE = Math.max(beginE, curEnergy);
+		double lE = Math.min(beginE, curEnergy);
+		double hE = Math.max(beginE, curEnergy);
 		minEnergy = Math.min(minEnergy,lE);
 		maxEnergy = Math.max(maxEnergy,hE);	
 								
@@ -2104,32 +2502,32 @@ public class RotamerSearch implements Serializable
 		//a96ff.initializeCalculation();
 		//a96ff.setNBEval(hElect,hVDW);
 	
-		float minEnergy = (float)Math.pow(10,30);
-		float maxEnergy = -(float)Math.pow(10,30);
+		double minEnergy = (double)Math.pow(10,30);
+		double maxEnergy = -(double)Math.pow(10,30);
 			
 		double energyTerms[] = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float beginE = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+		double beginE = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 		
 		beginE -= removeExtraE(templateOnly, res1Strand, res1Resnum, res2Strand, res2Resnum, strandMut);
 		
-		float initActualCoords[] = m.getActualCoords(); //this is necessary for performing brMin.applyMaxBackrub() after brMin.minimizeFull()
+		double initActualCoords[] = m.getActualCoords(); //this is necessary for performing brMin.applyMaxBackrub() after brMin.minimizeFull()
 		brMin.minimizeFull(shellRun,templateOnly); //minimize
 		
 		energyTerms = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float curEnergy = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+		double curEnergy = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 		curEnergy -= removeExtraE(templateOnly, res1Strand, res1Resnum, res2Strand, res2Resnum, strandMut);
 		m.setActualCoords(initActualCoords);
 		
 		brMin.applyMaxBackrub();
 		energyTerms = templateOffA96ff.calculateTotalEnergy(m.actualCoordinates,-1); //compute the energy
-		float maxE = (float)energyTerms[0];//calcTotalSnapshotEnergy();
+		double maxE = (double)energyTerms[0];//calcTotalSnapshotEnergy();
 		maxE -= removeExtraE(templateOnly, res1Strand, res1Resnum, res2Strand, res2Resnum, strandMut);
-		beginE = (float)Math.min(beginE,maxE); //max energy will be the min of (initial energy) and (max sterically-allowed energy from brMin)
+		beginE = (double)Math.min(beginE,maxE); //max energy will be the min of (initial energy) and (max sterically-allowed energy from brMin)
 		
 		if (beginE<curEnergy)
 			curEnergy = beginE;
-		float lE = Math.min(beginE, curEnergy);
-		float hE = Math.max(beginE, curEnergy);
+		double lE = Math.min(beginE, curEnergy);
+		double hE = Math.max(beginE, curEnergy);
 		minEnergy = Math.min(minEnergy,lE);
 		maxEnergy = Math.max(maxEnergy,hE);	
 								
@@ -2155,10 +2553,10 @@ public class RotamerSearch implements Serializable
 	//Computes the intra- and shell-based energies that have been double-counted in the pairwise
 	//		energy computation and must be removed from the computed energy;
 	//This is currently called for the backrubs and backbone pairwise minimization, but not for the side-chain dihedral minimization
-	private float removeExtraE(boolean templateOnly, int res1Strand, int res1Resnum, int res2Strand, int res2Resnum, int strandMut[][]){
+	private double removeExtraE(boolean templateOnly, int res1Strand, int res1Resnum, int res2Strand, int res2Resnum, int strandMut[][]){
 		
-		float removeE = 0.0f;
-		float tmpE1;
+		double removeE = 0.0f;
+		double tmpE1;
 		if (!templateOnly){
 			if (res2Resnum != -1) { //not a shell run
 				tmpE1 = computeEnergyOfOnlyRes(m.strand[res1Strand].residue[res1Resnum].moleculeResidueNumber,0,strandMut,res1A96ff);
@@ -2200,7 +2598,7 @@ public class RotamerSearch implements Serializable
 
                     int resPertState = ((StrandRCs)strandRot[str]).RCPertStates[strResNum][curAA][curRC];//Residue perturbation state in this RC
                     int pertState = m.strand[str].residue[strResNum].pertStates[resPertState][0];//Corresponding state of the full structure switch
-                    float switchE = switchedTemplateE[pertState];
+                    double switchE = switchedTemplateE[pertState];
 
                     retEMatrixMin.addToShellRotE(0, curAA, curRC, switchE);
                     retEMatrixMax.addToShellRotE(0, curAA, curRC, switchE);
@@ -2476,7 +2874,12 @@ public class RotamerSearch implements Serializable
 			System.out.println("Warning: MinDEE matrix not computed");
 			return;
 		}
+                
+                
+                if(useCCD || es.useEPIC)
+                    m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, null);
 
+                
 		// Setup the residue number to AS number map
 		/*for(int i=0;i<m.strand[sysStrNum].numberOfResidues;i++){
 			curResToASMap[i] = -1;
@@ -2599,7 +3002,14 @@ public class RotamerSearch implements Serializable
 					if (doMinimization){
 						if (!minimizeBB){ //side-chain minimization
 							//if(ligPresent)
-							simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
+							if(useCCD){
+                                                            efunc = new ForceFieldEnergy(m, a96ff);
+                                                            ContSCObjFunction of = new ContSCObjFunction(m,numberOfStrands,efunc,strandRot,curAANum,doDihedE,null);
+                                                            efunc = of.efunc;//ef will now include dihedral energies if appropriate
+                                                            ccdMin = new CCDMinimizer(of,false);
+                                                        }
+                                                        else
+								simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
 							//else
 							//	simpMin.initialize(m,sysStrNum,a96ff,sysLR,curAANum,doDihedE,rl);
 						}
@@ -2628,11 +3038,26 @@ public class RotamerSearch implements Serializable
 				
 				  // also computes num of confs at each level
 				//numConfsLeft = (numConfsTotal-numConfsPrunedByMinDEE); //MinDEE should have already been applied
-				
+
+                                //if doing EPIC and checking thresholds need the lowest bound without polynomial fits
+                                if(es.useEPIC && es.enforceEPICThresh){
+                                    System.out.println("Getting lowest-bound energy...");
+                                    es.gettingLowestBound = true;
+                                    slaveRotamerSearchAStar(maxDepth, strandMut, minimizeBB, saveConfs, fName, doBackrubs,
+						saveTopConfs, printTopConfs, numTopConfs, useMaxKSconfs, maxKSconfs);
+                                    es.gettingLowestBound = false;
+                                    System.out.println("Got lowest bound: "+es.lowestBound);
+                                }
+                                
+                                
+                                long AStarStartTime = System.currentTimeMillis();
+
 				//Perform A* search: compute the partial partition function q*
 				slaveRotamerSearchAStar(maxDepth, strandMut, minimizeBB, saveConfs, fName, doBackrubs,
 						saveTopConfs, printTopConfs, numTopConfs, useMaxKSconfs, maxKSconfs);
-				
+
+                                System.out.println("Partition function time (ms): "+(System.currentTimeMillis()-AStarStartTime));
+
 				//Print the top structures
 				if((saveTopConfs || printTopConfs) && runNum >= 0){
 					ConfPair confPairs[] = new ConfPair[topConfs.size()];
@@ -2832,7 +3257,16 @@ public class RotamerSearch implements Serializable
 		}
 		
 		MSAStar AStarSearch = new MSAStar(treeLevels,numRotForResNonPruned,arpMatrixRed,stericF,
-                        splitFlagsRed,tripleFlagsRed,doPerturbations);
+                        splitFlagsRed,tripleFlagsRed,doPerturbations,es);
+
+                if(es.useEPIC){//set up fit series for A* search
+                    if(es.gettingLowestBound)//run A* without EPIC
+                        AStarSearch.es = new EPICSettings();
+                    else{
+                        AStarSearch.DOFList = m.DOFs;
+                        AStarSearch.CETM = cetm;
+                    }
+                }
 		
 		curConf = new int[treeLevels]; //the rotamer sequence				
 		boolean run1 = true;
@@ -2904,6 +3338,32 @@ public class RotamerSearch implements Serializable
 			
 			//Check the energy of the conformation and compute the score if necessary
 			double minELowerBound = (double)(computeBestRotEnergyBound(/*numTotalRotamers,rotamerIndexOffset*/));
+                        if(es.useEPIC){
+                            
+                            if(es.gettingLowestBound){//just want to get the lowest bound,
+                                //without polynomial fits, from this A* tree and return
+                                es.lowestBound = minELowerBound;
+                                return;
+                            }
+
+                            CETObjFunction lof = cetm.getObjFunc(ASAANums, curStrRotNum, false, false);
+                            CCDMinimizer lsbMin = new CCDMinimizer(lof,false);
+                            DoubleMatrix1D bestVals = lsbMin.minimize();
+                            
+                            
+                            double LSBE = lof.getValue(bestVals);//compute scaled polynomial fits' contribution to energy bound
+                            minELowerBound += LSBE;//and this will be used as the energy too!
+                            
+                            //check validity of thresholds
+                            es.checkThresh1Validity(lof,bestVals);
+                            if(es.enforceEPICThresh){
+                                if(minELowerBound > es.lowestBound+es.EPICThresh2){
+                                    System.err.println("ERROR: EPICThresh2="+es.EPICThresh2+" insufficient for "
+                                            +" energy="+minELowerBound+" lowestBound="+es.lowestBound);
+                                    System.exit(1);
+                                }
+                            }
+                        }
 			//double psi = Math.max(initial_q,partial_q);
 			BigDecimal psi = initial_q.max(partial_q.multiply(new BigDecimal(ro)));
 			
@@ -2939,7 +3399,8 @@ public class RotamerSearch implements Serializable
 			System.out.println("conf: "+numConfsEvaluated.add(BigInteger.ONE)+" minELowerBound: "+minELowerBound+" curThreshold: "+curThreshold);
 			System.out.println("pStar: "+printBigNum(pStar,3)+" qStar: "+printBigNum(partial_q,3)+" rho*qStar: "+printBigNum(partial_q.multiply(new BigDecimal(ro)),3));
 			
-			if (minELowerBound > curThreshold) 
+			if (minELowerBound > curThreshold && numConfsEvaluated.compareTo(BigInteger.ZERO)>0 )
+                                //MH: always evaluate at least one conformation 
 				return;
 			else if(useMaxKSconfs && numConfsEvaluated.compareTo(maxKSconfs) > 0)
 				return;
@@ -2953,19 +3414,33 @@ public class RotamerSearch implements Serializable
 				numConfsLeft = numConfsLeft.subtract(BigInteger.ONE);
 				if (stericF!=null)
 					stericF.setNumConfsLeft(numConfsLeft); //update the number of conformations still to examine
-				float energy = 0.0f;
-				float unMinE = 0.0f;
+				double energy = 0.0f;
+				double unMinE = 0.0f;
 				if (doMinimization){
-					if (!minimizeBB){ //side-chain minimization
+                                        if(es.useEPIC){
+                                                energy = minELowerBound;
+                                                unMinE = energy;//we don't generate an unminimized energy in this case
+                                                //but this isn't really needed for the K* so we'll go with this
+                                                if (energy < bestEUnMin) {
+							bestEUnMin = energy;
+						}
+                                        }
+					else if (!minimizeBB){ //side-chain minimization
 						energy = calcTotalSnapshotEnergy();
 						unMinE = energy;
 						if (energy < bestEUnMin) {
 							bestEUnMin = energy;
 						}						
-						simpMin.minimize(numMinSteps);
-						energy = calcTotalSnapshotEnergy();
-						if (doDihedE) //add dihedral energies
-							energy += simpMin.computeDihedEnergy();
+						if(useCCD){//The ideal dihedrals are already recorded since we just reinitialized ccdMin
+                                                    ccdMin.minimize();
+                                                    energy = (double)this.efunc.getEnergy();
+                                                }
+                                                else{
+                                                    simpMin.minimize(numMinSteps);
+                                                    energy = calcTotalSnapshotEnergy();
+                                                    if (doDihedE) //add dihedral energies
+                                                            energy += simpMin.computeDihedEnergy();
+                                                }
 					}
 					else { //backbone minimization
 						energy = calcTotalSnapshotEnergy();
@@ -2984,7 +3459,7 @@ public class RotamerSearch implements Serializable
 						saveMolecule(m,(fName+numConfsEvaluated+".pdb"),energy);
 				}
 				else if (computeEVEnergy){
-					energy = (float)minELowerBound;
+					energy = (double)minELowerBound;
 					unMinE = energy;
 					if (energy < bestEUnMin) {
 						bestEUnMin = energy;
@@ -2999,7 +3474,7 @@ public class RotamerSearch implements Serializable
 				partial_q = partial_q.add(ef.exp(-((double)(energy)) / constRT));
 				
 				if ((saveTopConfs || printTopConfs)){
-					float[] myEnergy = new float[2];
+					double[] myEnergy = new double[2];
 					myEnergy[0] = energy;
 					myEnergy[1] = unMinE;
 					ConfPair cp = new ConfPair(conf, myEnergy);
@@ -3099,11 +3574,11 @@ public class RotamerSearch implements Serializable
  */		
 	//Compute the two interval terms in the summation of the MinDEE criteria
 	public void doCompMinDEEIntervals(int numMutable, int strandMut[][], PrunedRotamers<Boolean> prunedRotAtRes,
-			boolean scaleInt, float maxIntScale){
+			boolean scaleInt, double maxIntScale){
 		
 		System.out.print("Computing MinDEE interval terms..");	
 		
-		float dist[][] = null;
+		double dist[][] = null;
 		if (scaleInt)
 			dist = doCompDistSC(numMutable,strandMut);
 		
@@ -3132,9 +3607,9 @@ public class RotamerSearch implements Serializable
 	}
 	//Compute the distance between the side-chains for each active site residue pair (the ligand is not considered here);
 	//	Returns the minimum distance between a pair of atoms in the two side-chains, for each side-chain pair
-	private float[][] doCompDistSC(int numMutable, int strandMut[][]){
+	private double[][] doCompDistSC(int numMutable, int strandMut[][]){
 		
-		float dist[][] = new float[numMutable][numMutable];
+		double dist[][] = new double[numMutable][numMutable];
 		
 		for (int str1=0;str1<numberOfStrands;str1++){
 			for(int i=0;i<strandMut[str1].length;i++){
@@ -3244,7 +3719,7 @@ public class RotamerSearch implements Serializable
         //as measured by their interaction energy being greater than the cutoff
         //Particularly useful for DEEPer
         public void pruneRidiculousPairs(int numMutable, int strandMut[][],
-			PrunedRotamers<Boolean> prunedRotAtRes, float cutoff){
+			PrunedRotamers<Boolean> prunedRotAtRes, double cutoff){
 
 		eliminatedRotAtRes = prunedRotAtRes;
 
@@ -3403,7 +3878,7 @@ public class RotamerSearch implements Serializable
 
 	//Marks all rotamer pairs for which the min energy matrix entry is greater than cutoff as having a steric clash;
 	//		If the max energy matrix exists, the corresponding entries are marked in the same way
-	public void preprocessPairs(float cutoff, int numMutable, int strandMut[][]){
+	public void preprocessPairs(double cutoff, int numMutable, int strandMut[][]){
 		
 		int numLevels = numMutable;
 		/*if (ligPresent)
@@ -3464,14 +3939,14 @@ public class RotamerSearch implements Serializable
 	}
 	//Do Bounds Pruning
 	public PrunedRotamers<Boolean> DoMinBounds(int numInAS, int strandMut[][],
-			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, float initEw, boolean useSF, boolean boundKS){
+			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, double initEw, boolean useSF, boolean boundKS){
 		
 		return DoMinBounds(numInAS, strandMut, 
 					pruningE, prunedRotAtRes, initEw, useSF, boundKS, false); //(onlyBounds==false)
 	}
 	
 	public PrunedRotamers<Boolean> DoMinBounds(int numMutable, int strandMut[][],
-			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, float initEw, boolean useSF, 
+			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, double initEw, boolean useSF, 
 			boolean boundKS, boolean onlyBounds){
 		
 		if (boundKS && onlyBounds){ //cannot be both set at the same time
@@ -3501,7 +3976,7 @@ public class RotamerSearch implements Serializable
 	}
 	//Do Bounding Flags
 	public void DoBoundFlags(int numMutable, int strandMut[][],
-			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, float initEw, boolean useSF){	
+			double pruningE, PrunedRotamers<Boolean> prunedRotAtRes, double initEw, boolean useSF){	
 		
 		BoundFlags bFlagsRun = new BoundFlags(arpMatrix,numMutable,strandMut,strandRot,
 				pruningE,prunedRotAtRes,splitFlags,useSF,initEw, mutRes2Strand, mutRes2StrandMutIndex, doPerturbations);
@@ -3513,10 +3988,10 @@ public class RotamerSearch implements Serializable
 	}
 	//Do simple Goldstein DEE
 	public PrunedRotamers<Boolean> DoDEEGoldstein(int numMutable,
-			int strandMut[][], float initEw, PrunedRotamers<Boolean> prunedRotAtRes,
+			int strandMut[][], double initEw, PrunedRotamers<Boolean> prunedRotAtRes,
 			boolean doMinimize, boolean useSF, boolean minimizeBB, boolean typeDep, 
-			boolean useMinDEEPruningEw, float Ival){
-		
+			boolean useMinDEEPruningEw, double Ival){
+
 		//arpmatrix has a row/column for the backbone energies, so we just need
 		//the # remaining entries, which is length-1 (only the AS and ligand rotamers)
 		DEEGoldstein DEERun = new DEEGoldstein(arpMatrix, arpMatrixMax, numMutable, strandMut, initEw, 
@@ -3533,9 +4008,9 @@ public class RotamerSearch implements Serializable
 
         
         public PrunedRotamers<Boolean> DoDEEIndirect(int numMutable, int strandMut[][],
-			float initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInPair[], boolean doMinimize,
+			double initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInPair[], boolean doMinimize,
 			boolean magicBullet, boolean distrDEE, boolean minimizeBB, boolean typeDep,
-                        boolean doIMinDEE, float Ival){
+                        boolean doIMinDEE, double Ival){
 
 
             DEEIndirect DEERun;
@@ -3585,9 +4060,9 @@ public class RotamerSearch implements Serializable
 
 
         public void DoDEETriples(int numMutable, int strandMut[][],
-			float initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInTriple[], boolean doMinimize,
+			double initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInTriple[], boolean doMinimize,
 			boolean magicBullet, int magicBulletNum, boolean distrDEE, boolean minimizeBB, boolean typeDep,
-                        boolean doIMinDEE, float Ival){
+                        boolean doIMinDEE, double Ival){
 
                 DEEGoldsteinTriples DEERun = new DEEGoldsteinTriples(arpMatrix, numMutable, strandMut, initEw, strandRot, prunedRotAtRes, 
                         resInTriple, doMinimize, splitFlags, magicBullet, magicBulletNum, distrDEE, minimizeBB,
@@ -3605,9 +4080,9 @@ public class RotamerSearch implements Serializable
 
 	//SplitDEE (conformational splitting) with 1 or 2 split positions
 	public PrunedRotamers<Boolean> DoDEEConfSplitting(int numMutable, 
-			int strandMut[][], float initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInMut[],
+			int strandMut[][], double initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInMut[],
 			boolean doMinimize, boolean useSF, int numSplits, 
-			boolean distrDEE, boolean minimizeBB, boolean typeDep, boolean doIMinDEE, float Ival){
+			boolean distrDEE, boolean minimizeBB, boolean typeDep, boolean doIMinDEE, double Ival){
 		
 		//arpmatrix has a row/column for the backbone energies, so we just need
 		//the # remaining entries, which is length-1 (only the AS and ligand rotamers)
@@ -3640,9 +4115,9 @@ public class RotamerSearch implements Serializable
 	}
 	//Do Goldstein DEE pairs
 	public void DoDEEPairs(int numMutable, int strandMut[][], 
-			float initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInPair[], boolean doMinimize, 
+			double initEw, PrunedRotamers<Boolean> prunedRotAtRes, boolean resInPair[], boolean doMinimize, 
 			boolean useSF, boolean magicBullet, boolean distrDEE, boolean minimizeBB, boolean scaleInt, 
-			float maxScale, boolean typeDep, boolean doIMinDEE, float Ival){
+			double maxScale, boolean typeDep, boolean doIMinDEE, double Ival){
 		
 		//arpmatrix has a row/column for the backbone energies, so we just need
 		//the # remaining entries, which is length-1 (only the AS and ligand rotamers)
@@ -3668,16 +4143,16 @@ public class RotamerSearch implements Serializable
                 return mpz;//Return an empty ArrayList because there are no minimal pruning zones
 
             int start = 0;
-            if(m.perts[0].resAffected.length == numMutable)//If there is an initial perturbation affecting everything (e.g. a full structure switch) don't count it
+            if(m.perts[0].resDirectlyAffected.length == numMutable)//If there is an initial perturbation affecting everything (e.g. a full structure switch) don't count it
                 start = 1;
 
             for(int pertNum=start;pertNum<m.perts.length;pertNum++){
 
                 Perturbation pert = m.perts[pertNum];
 
-                int flexResAffected[] = new int[pert.resAffected.length];//Residues affected by the perturbation (numbering with respect to all flexible residues)
-                for(int a=0;a<pert.resAffected.length;a++){
-                    int molResNum = pert.resAffected[a];//The molecule residue number
+                int flexResAffected[] = new int[pert.resDirectlyAffected.length];//Residues affected by the perturbation (numbering with respect to all flexible residues)
+                for(int a=0;a<pert.resDirectlyAffected.length;a++){
+                    int molResNum = pert.resDirectlyAffected[a];//The molecule residue number
                     int strResNum = m.residue[molResNum].strandResidueNumber;
                     int str = m.residue[molResNum].strandNumber;
                     for(int b=0;b<numMutable;b++){
@@ -3737,11 +4212,11 @@ public class RotamerSearch implements Serializable
 //////////////////////////////////////////////////////////////////////////
 //	Compute Min GMEC section
 //////////////////////////////////////////////////////////////////////////
-	public float doAStarGMEC(String fileName, boolean searchComputeEVEnergy, 
+	public double doAStarGMEC(String fileName, boolean searchComputeEVEnergy, 
 			boolean searchDoMinimization,int numMutable, 
-			int strandMut[][], String strandDefault[][],int numMut, float Ew, double bestScore, 
-			CommucObj cObj, boolean approxMinGMEC, float lambda, boolean minimizeBB, boolean useEref, 
-			float eRef[][], boolean doBackrubs, String backrubFile, boolean useMinDEEPruningEw, float Ival) {
+			int strandMut[][], String strandDefault[][],int numMut, double Ew, double bestScore, 
+			CommucObj cObj, boolean approxMinGMEC, double lambda, boolean minimizeBB, boolean useEref, 
+			double eRef[][], boolean doBackrubs, String backrubFile, boolean useMinDEEPruningEw, double Ival) {
 	
 		// A rotamer search is performed. For each residue,
 		//  every allowable rotamer is tried in combination
@@ -3792,7 +4267,7 @@ public class RotamerSearch implements Serializable
 			}*/
 			if (doMinimization){
 				if (!minimizeBB){ //side-chain minimization
-					if (simpMin == null) {
+					if (simpMin == null&&ccdMin == null) {
 						System.out.println("Warning: Attempting minimization run but simpMin not allocated, RotamerSearch aborting");
 						return -1;
 					}
@@ -3840,10 +4315,10 @@ public class RotamerSearch implements Serializable
 	// Calls AStar repeatedly while the returned conformations still have energy below the threshold;
 	//		computes the partial partition function q*;
 	// Called by mutationRotamerSearch(.)
-	private float doAStarGMECHelper(int numMutable, int strandMut[][], String fileName, 
-			String strandDefault[][], int numMut, float Ew, double bestScore, CommucObj cObj, 
-			boolean approxMinGMEC, float lambda, boolean minimizeBB, boolean useEref, float eRef[][], 
-			boolean doBackrubs, String backrubFile, boolean useMinDEEPruningEw, float Ival){
+	private double doAStarGMECHelper(int numMutable, int strandMut[][], String fileName, 
+			String strandDefault[][], int numMut, double Ew, double bestScore, CommucObj cObj, 
+			boolean approxMinGMEC, double lambda, boolean minimizeBB, boolean useEref, double eRef[][], 
+			boolean doBackrubs, String backrubFile, boolean useMinDEEPruningEw, double Ival){
 		
 		/*/////////////////////////////////////////////////////////////////////
 		PrintStream debugPS = null;
@@ -4020,22 +4495,43 @@ public class RotamerSearch implements Serializable
 				System.out.println("ERROR: An exception occured while opening log file");
 			}
 		}
-		
-		
-		//Set-up the A* search					
-		MSAStar MSAStarSearch = new MSAStar(treeLevels,numRotForResNonPruned,arpMatrixRed,null,
-                        splitFlagsRed,tripleFlagsRed,doPerturbations);
-		
+
+
+                if(useCCD || es.useEPIC )
+                    m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, strandDefault);
+
+                //Set-up the A* search
+                MSAStar MSAStarSearch = new MSAStar(treeLevels,numRotForResNonPruned,arpMatrixRed,null,
+                        splitFlagsRed,tripleFlagsRed,doPerturbations,es);
+
 		curConf = new int[treeLevels]; //the rotamer sequence				
 		boolean run1 = true;
 		int numConfsOutput = 0;//num confs output to file
-		float lowestBound = stericE;
+		double lowestBound = stericE;
 		
+                
+                if(es.useEPIC){
+                    if(es.gettingLowestBound)//need to run non-EPIC A*
+                        MSAStarSearch.es = new EPICSettings();
+                    else{//set up the MSAStarSearch to handle fit series
+                        MSAStarSearch.DOFList = m.DOFs;
+                        MSAStarSearch.CETM = cetm;
+                        lowestBound = es.lowestBound;
+                    }
+                }
+                
+                
 		/*if (!doMinimization)
 			approxMinGMEC = false; //reset approxMinGMEC, since it is valid only for MinDEE, and not for traditional DEE*/
 
-		updateBestE((float)bestScore);
-	
+		updateBestE((double)bestScore);
+
+
+                ArrayList<double[]> CETRecord = new ArrayList<double[]>();
+                //this records data on the polynomial fits for use in analysis
+                //if we are running checkEPIC
+                
+                
 		while (true){
 			
 			//debugPS.println("curMinE: "+curMinE);debugPS.flush();
@@ -4060,9 +4556,10 @@ public class RotamerSearch implements Serializable
 			//curLigAANum = -1;
 			//curLigRotNum = -1;
 			
-			
-			curConf = MSAStarSearch.doAStar(run1,numMut,AAdefault,eliminatedRotAtPosRed,strandRot,strandDefault,numRotForRes,strandMut,false,mutRes2Strand, mutRes2StrandMutIndex); //the current rotamer sequence
-			
+
+                        curConf = MSAStarSearch.doAStar(run1, numMut, AAdefault, eliminatedRotAtPosRed, strandRot, strandDefault, numRotForRes, strandMut, false, mutRes2Strand, mutRes2StrandMutIndex); //the current rotamer sequence
+                        System.out.println( MSAStarSearch.getNumNodes() + " A* tree nodes");
+
 			System.out.println("confNum: "+(numConfsEvaluated.add(BigInteger.ONE)));
 			System.out.print("curConf: ");for(int i=0;i<treeLevels;i++)System.out.print(curConf[i]+" ");System.out.println();
 			
@@ -4217,21 +4714,56 @@ public class RotamerSearch implements Serializable
 			
 			//////////////////////////////////////////////////////////////////////////////////////////
 			// Energy computation
-			float unMinE = 0.0f;
-			float minE = 0.0f;
+			double unMinE = 0.0f;
+			double minE = 0.0f;
 				
-			float minELowerBound = computeBestRotEnergyBound(/*numTotalRotamers,rotamerIndexOffset*/);
+			double minELowerBound = computeBestRotEnergyBound(/*numTotalRotamers,rotamerIndexOffset*/);
 			
+                        if(es.gettingLowestBound){
+                            es.lowestBound = minELowerBound;
+                            return 0;//not going to use the interval in this case, just wanted the lowestBound
+                        }
+                            
+                        
 			//debugPS.println("minELowerBound: "+minELowerBound);debugPS.flush();
 			
 			
-			if (run1) //this is the first extracted conformation, so it has the lowest energy lower bound, so store it
-				lowestBound = minELowerBound;
+			if (run1 && !es.useEPIC) //this is the first extracted conformation, so it has the lowest energy lower bound, so store it
+                            //for EPIC the lowestBound has been precomputed
+                            lowestBound = minELowerBound;
 			
 			
 			boolean done = false;
-			
-			if ((minELowerBound>(getBestE()+Ew)) && (!run1)){ //we already have all confs within Ew of the minGMEC
+                        
+                        double polyE = 0;//energy, calculated with polynomial fits (0 if not using EPIC)
+                        
+                        if(es.useEPIC){
+                             //compute energy from polynomial fits
+
+                            CETObjFunction lof = cetm.getObjFunc(ASAANums,curStrRotNum,false,false);
+                            CCDMinimizer lmin = new CCDMinimizer(lof,false);
+
+                            DoubleMatrix1D lminVals = lmin.minimize();
+                            double LSBE = lof.getValue( lminVals );//comput scaled level-set bound contribution to energy bound
+
+                            polyE = minELowerBound + LSBE;
+                            double noShellShell = polyE - arpMatrix.getShellShellE();
+                            System.out.println("CET term: "+LSBE+" Full bound: "+polyE+" Without shell-shell E:"+noShellShell);
+
+                            System.out.print("CET components: ");
+                            lof.printTerms(lminVals);
+                            System.out.println();
+
+                            minE = polyE;
+                            
+                            es.checkThresh1Validity(lof,lminVals);
+                            
+                            //we know we're enumerating conformations in order of energy
+                            //so if minE is more than Ew above the GMEC so far, then we've got all the conformations we need
+                            if( minE > (getBestE()+Ew) )
+                                done = true;
+                        }
+                        else if ((minELowerBound>(getBestE()+Ew)) && (!run1)){ //we already have all confs within Ew of the minGMEC
 				done = true;
 			}
 			else if (approxMinGMEC){ //running the heuristic halting condition
@@ -4243,9 +4775,33 @@ public class RotamerSearch implements Serializable
 			//  withing Ew of the lowestBound, while the old MinDEE doesn't prune anything within Ew of
 			//   the minGMEC.  In any case, if we pruned too much, returned the new energy window so 
 			//   the process can be repeated.  
+                        
+                        /* 2013: iMinDEE pruning ensures all rotamers are present for conformations whose lower bounds are within
+                         * Ival+Ew of the lowestBound.  So if we enumerate in order of lower bound and finish with all lower bounds
+                         * below lowestBound+Ival+Ew, then we know that less iMinDEE pruning would not add any conformations to our enumeration.  
+                         * But with EPIC, we are enumerating in order of minimized E.  We have precomputed the lowestBound.  
+                         * If we finish with all lower bounds below lowestBound+Ival+Ew, then we still may have missed some
+                         * but if we finish with all minimized E's below lowestBound+Ival+Ew, then we know any missed conf
+                         * would have to have minimized E and thus lower bound below lowestBound+Ival+Ew.  This is a contradiction.  
+                         * Either way, an Ival of (GMEC so far - lowestBound) is returned and will def be sufficient for the repeated run
+                         */
 			if(useMinDEEPruningEw){  
-				if(lowestBound+Ival < minELowerBound || getBestE() < minELowerBound){ // We are not done and we pruned too much, repeat search
-					return (getBestE()-lowestBound);
+                                if(es.useEPIC){
+                                    if(lowestBound+Ival+Ew < minE){
+                                        if(es.checkEPIC)
+                                            EPICFitter.analyzeLSBRecord(CETRecord);
+                                        double IvalTol = RotamerSearch.constRT;//we want to raise the Ival to make sure that
+                                        //we have all conformations up to minE, where minE may vary a little bit from run to run
+                                        //depending on the EpicFitter samples (hence we need a tolerance).  
+                                        //But the variation should be (generally much) less than thermal energy, so we use that as tolerance
+                                        if(run1)//if first conformation, haven't updated best E yet, so just use our single conformational energy so far 
+                                            return (minE-lowestBound+IvalTol);
+                                        else//use best so far
+                                            return (getBestE()-lowestBound+IvalTol);
+                                    }
+                                }
+                                else if(lowestBound+Ival+Ew < minELowerBound /*|| getBestE()+Ew < minELowerBound*/){ // We are not done and we pruned too much, repeat search
+                                    return (getBestE()-lowestBound);
 				}			  
 			}
 			
@@ -4256,7 +4812,10 @@ public class RotamerSearch implements Serializable
 					cObj.bestScore = new BigDecimal(getBestE()); //update the best score so far to supply to the next partition
 				
 				MSAStarSearch = null;
-				
+
+                                if(es.checkEPIC)
+                                    EPICFitter.analyzeLSBRecord(CETRecord);
+
 				/*CommucObj.ConfInfo tempConf[] = new CommucObj.ConfInfo[numConfsEvaluated];				
 				System.arraycopy(cObj.confSeq,0,tempConf,0,numConfsEvaluated);				
 				cObj.confSeq = tempConf;*/
@@ -4271,73 +4830,92 @@ public class RotamerSearch implements Serializable
 			}
 			
 			else{
-				if (computeEVEnergy){
-					a96ff.calculateTypesWithTemplates();
-					a96ff.initializeCalculation();
-					a96ff.setNBEval(hElect,hVDW);
-					if (doMinimization){
-						if (!minimizeBB){
-								/*if(ligPresent){
-								simpMin.initialize(m,sysStrNum,ligStrNum,a96ff,sysLR,ligROT,curAANum,curLigAANum,doDihedE,rl,grl);
-							}
-								else*/
-								simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
-						}
-						else { //backbone minimization
-							if (!doBackrubs){
-									/*if (ligPresent)
-									bbMin.initialize(m, a96ff, residueMap, sysStrNum, ligStrNum);
-									else*/
-									bbMin.initialize(m, a96ff, strandMut, numberOfStrands);
-							}
-							else {
-									brMin.initialize(m, a96ff, strandMut, backrubFile, hSteric, overlapThresh, numberOfStrands,true);
-							}
-						}
-					}
-				}
-				if (doMinimization){
-					if (!minimizeBB) {//side-chain minimization
-						unMinE = calcTotalSnapshotEnergy();
-						simpMin.minimize(numMinSteps);
-						minE = calcTotalSnapshotEnergy();
-						if (doDihedE) //add dihedral energies
-							minE += simpMin.computeDihedEnergy();
-					}
-					else {//backbone minimization
-						unMinE = calcTotalSnapshotEnergy();
-						if (!doBackrubs)
-							bbMin.minimizeFull(false);
-						else{
-							brMin.minimizeFull();
-						}
-						minE = calcTotalSnapshotEnergy();
-					}
+                                if(es.checkEPIC || !es.useEPIC){
+                                    if (computeEVEnergy){
+                                            a96ff.calculateTypesWithTemplates();
+                                            a96ff.initializeCalculation();
+                                            a96ff.setNBEval(hElect,hVDW);
+                                            if (doMinimization){
+                                                    if (!minimizeBB){
+                                                                    /*if(ligPresent){
+                                                                    simpMin.initialize(m,sysStrNum,ligStrNum,a96ff,sysLR,ligROT,curAANum,curLigAANum,doDihedE,rl,grl);
+                                                            }
+                                                                    else*/
+                                                            if(useCCD){
+                                                                efunc = new ForceFieldEnergy(m, a96ff);
+                                                                ContSCObjFunction of = new ContSCObjFunction(m,numberOfStrands,efunc,strandRot,curAANum,doDihedE,null);
+                                                                efunc = of.efunc;//ef will now include dihedral energies if appropriate
+                                                                ccdMin = new CCDMinimizer(of,false);
+                                                            }
+                                                            else
+                                                                    simpMin.initialize(m,numberOfStrands,a96ff,strandRot,curAANum,doDihedE);
+                                                    }
+                                                    else { //backbone minimization
+                                                            if (!doBackrubs){
+                                                                            /*if (ligPresent)
+                                                                            bbMin.initialize(m, a96ff, residueMap, sysStrNum, ligStrNum);
+                                                                            else*/
+                                                                            bbMin.initialize(m, a96ff, strandMut, numberOfStrands);
+                                                            }
+                                                            else {
+                                                                            brMin.initialize(m, a96ff, strandMut, backrubFile, hSteric, overlapThresh, numberOfStrands,true);
+                                                            }
+                                                    }
+                                            }
+                                    }
+                                    if (doMinimization){
+                                            if (!minimizeBB) {//side-chain minimization
+                                                    unMinE = calcTotalSnapshotEnergy();
+                                                    if(useCCD){//The ideal dihedrals are already recorded since we just reinitialized ccdMin
+                                                        ccdMin.minimize();
+                                                        minE = (double)efunc.getEnergy();
+                                                    }
+                                                    else{
+                                                        simpMin.minimize(numMinSteps);
+                                                        minE = calcTotalSnapshotEnergy();
+                                                        if (doDihedE) //add dihedral energies
+                                                                minE += simpMin.computeDihedEnergy();
+                                                    }
+                                            }
+                                            else {//backbone minimization
+                                                    unMinE = calcTotalSnapshotEnergy();
+                                                    if (!doBackrubs)
+                                                            bbMin.minimizeFull(false);
+                                                    else{
+                                                            brMin.minimizeFull();
+                                                    }
+                                                    minE = calcTotalSnapshotEnergy();
+                                            }
+                                                m.updateCoordinates();
+                                                if(doPerturbations)
+                                                    m.revertPertParamsToCurState();
+                                    }
+                                    else if (computeEVEnergy){ //no minimization, so traditional DEE
+                                            minE = calcTotalSnapshotEnergy(); //the sum of the precomputed energy terms
+                                            unMinE = minE;
                                             m.updateCoordinates();
-                                            if(doPerturbations)
-                                                m.revertPertParamsToCurState();
-				}
-				else if (computeEVEnergy){ //no minimization, so traditional DEE
-					minE = calcTotalSnapshotEnergy(); //the sum of the precomputed energy terms
-					unMinE = minE;
-					m.updateCoordinates();
-				}
+                                    }
 
-					float totEref = 0.0f;
-					float totEntropy = 0.0f;
-					if (useEref)
-						totEref = getTotSeqEref(eRef,numMutable,strandMut);
-					if (EnvironmentVars.useEntropy)
-						totEntropy = getTotSeqEntropy(strandMut);
-					unMinE -= totEref;
-					minE -= totEref;
-				
+                                    double totEref = 0.0f;
+                                    double totEntropy = 0.0f;
+                                    if (useEref)
+                                            totEref = getTotSeqEref(eRef,numMutable,strandMut);
+                                    if (EnvironmentVars.useEntropy)
+                                            totEntropy = getTotSeqEntropy(strandMut);
+                                    unMinE -= totEref;
+                                    minE -= totEref;
+                                    
+                                    if(es.checkEPIC)//record different conformational energy estimates
+                                        CETRecord.add(new double[]{minELowerBound,polyE,minE});
+                                }
+                                
+                                
 				updateBestE(minE); //for the halting condition
 				////////////////////////////////////////////////////////////////////////////////////////////
 				
 				
 				System.out.println(minELowerBound+" "+minE+" "+getBestE());				
-				
+
 				//Since we only need to save the information for conformations whose energy is within Ew of
 				//	the minGMEC, we can compare the minimized energy for the current conformation to the
 				//	lowest minimized energy in the search so far and output only the conformations that
@@ -4406,11 +4984,11 @@ public class RotamerSearch implements Serializable
 	
 	
 	//Returns the reference energy for the current amino acid sequence assignment (for the mutatable positions only)
-	private float getTotSeqEntropy(int [][] strandMut){
+	private double getTotSeqEntropy(int [][] strandMut){
 		
 		double[] entropy = EnvironmentVars.getEntropyTerms();
 		
-		float totEref = 0.0f;
+		double totEref = 0.0f;
 		
 		
 		for(int str=0; str<numberOfStrands;str++){
@@ -4428,9 +5006,9 @@ public class RotamerSearch implements Serializable
 	}
 
 	//Returns the reference energy for the current amino acid sequence assignment (for the mutatable positions only)
-	public float getTotSeqEref(float eRef[][], int numMutable, int strandMut[][]){
+	public double getTotSeqEref(double eRef[][], int numMutable, int strandMut[][]){
 		
-		float totEref = 0.0f;
+		double totEref = 0.0f;
 				
 		int ctr = 0;
 		for(int str=0; str<numberOfStrands;str++){
@@ -4569,16 +5147,16 @@ public class RotamerSearch implements Serializable
 		
 		for (int curSample=0; curSample<numSamples; curSample++){ //generate up to numSamples backbones
 			
-			float curFiChange[] = new float[numMutable]; //the phi changes for each residue
-			float curPsiChange[] = new float[numMutable]; //the psi changes for each residue
+			double curFiChange[] = new double[numMutable]; //the phi changes for each residue
+			double curPsiChange[] = new double[numMutable]; //the psi changes for each residue
 			
 			for(int curRes=0; curRes<numMutable; curRes++){ //apply the random (phi,psi) changes for each residue
 				int str = mutRes2Strand[curRes];
 				int strResNum = strandMut[str][mutRes2StrandMutIndex[curRes]];
 				int molResNum = m.strand[str].residue[strResNum].moleculeResidueNumber;
 				//Get the random (phi,psi) change
-				curFiChange[curRes] = 2*(randNum.nextFloat()-0.5f)*(float)theta; //phi change within (-theta,theta)
-				curPsiChange[curRes] = 2*(randNum.nextFloat()-0.5f)*(float)theta; //psi change within (-theta,theta)
+				curFiChange[curRes] = 2*(randNum.nextDouble()-0.5f)*(double)theta; //phi change within (-theta,theta)
+				curPsiChange[curRes] = 2*(randNum.nextDouble()-0.5f)*(double)theta; //psi change within (-theta,theta)
 				
 				//Apply the (phi,psi) change
 				bb.applyFiPsi(m,str,strResNum,curFiChange[curRes],0);
@@ -4782,7 +5360,7 @@ public class RotamerSearch implements Serializable
 	
 	/*//Determines how many residue positions in the system strand (pos is strand-relative numbering)
 	//		are within dist from residue position pos
-	public boolean [] getProxAS(int pos, float dist, boolean as[]){
+	public boolean [] getProxAS(int pos, double dist, boolean as[]){
 		
 		Residue r1 = m.strand[sysStrNum].residue[pos];
 		for (int i=0; i<m.strand[sysStrNum].numberOfResidues; i++){
@@ -4800,7 +5378,7 @@ public class RotamerSearch implements Serializable
 	
 	
 //////////////////////////////////////////////////////////////////////////////////
-	public void saveMolecule(Molecule m, String fname, float energy){
+	public void saveMolecule(Molecule m, String fname, double energy){
 		m.backupAtomCoord();
 		boolean printSegID = false;
 		try{
@@ -4856,16 +5434,16 @@ public class RotamerSearch implements Serializable
 			m.strand[sysStrNum].residue[residueMap[i]].setEnergyEval(true, true);
 			m.strand[sysStrNum].residue[residueMap[i]].flexible = true;
 			
-			float intraEi = computeEnergyOfOnlyRes(m.strand[sysStrNum].residue[residueMap[i]].moleculeResidueNumber);
+			double intraEi = computeEnergyOfOnlyRes(m.strand[sysStrNum].residue[residueMap[i]].moleculeResidueNumber);
 			
 			for (int j=i+1; j<residueMap.length; j++){
 				
 				m.strand[sysStrNum].residue[residueMap[j]].setEnergyEval(true, true);
 				m.strand[sysStrNum].residue[residueMap[j]].flexible = true;
 				
-				float intraEj = computeEnergyOfOnlyRes(m.strand[sysStrNum].residue[residueMap[j]].moleculeResidueNumber);
+				double intraEj = computeEnergyOfOnlyRes(m.strand[sysStrNum].residue[residueMap[j]].moleculeResidueNumber);
 				
-				float pairE = calcTotalSnapshotEnergy() - intraEi - intraEj;
+				double pairE = calcTotalSnapshotEnergy() - intraEi - intraEj;
 				
 				logPS.println(i+" "+j+" "+pairE+" "+intraEj);
 				
@@ -4886,9 +5464,9 @@ public class RotamerSearch implements Serializable
 			m.strand[sysStrNum].residue[residueMap[i]].setEnergyEval(true, true);
 			m.strand[sysStrNum].residue[residueMap[i]].flexible = true;
 			
-			float shellE = computeEnergyOfOnlyTemplate(residueMap);
+			double shellE = computeEnergyOfOnlyTemplate(residueMap);
 			
-			float resShellE = calcTotalSnapshotEnergy() - intraEi - shellE;
+			double resShellE = calcTotalSnapshotEnergy() - intraEi - shellE;
 			
 			for(int j=0;j<m.numberOfResidues;j++){
 				m.residue[j].setEnergyEval(false, false);
@@ -4935,13 +5513,14 @@ public class RotamerSearch implements Serializable
 	public void resetMatrices() {
 		arpMatrix = null;
 		arpMatrixMax = null;
+                cetm = null;
 	}
 
-	public static float[][] loadErefMatrix(String fileName){
-		float[][] eref = null;
+	public static double[][] loadErefMatrix(String fileName){
+		double[][] eref = null;
 		try{
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName));
-			eref = (float [][])in.readObject();
+			eref = (double [][])in.readObject();
 			in.close();
 		}
 		catch (Exception e){}
@@ -4967,9 +5546,9 @@ public class RotamerSearch implements Serializable
 					int aaInd = strandRot[str].getIndexOfNthAllowable(strResNum,j);
 					int numRot = getNumRot(str, strResNum, aaInd);
 					for (int k=0; k<numRot; k++){
-						arpMatrix.addToIntraE( i, aaInd, k, (float) entropy[aaInd] );
+						arpMatrix.addToIntraE( i, aaInd, k, (double) entropy[aaInd] );
 						if (doMinimize)
-                                                        arpMatrixMax.addToIntraE( i, aaInd, k, (float) entropy[aaInd] );
+                                                        arpMatrixMax.addToIntraE( i, aaInd, k, (double) entropy[aaInd] );
 						ind++;
 					}
 				}
@@ -4981,7 +5560,7 @@ public class RotamerSearch implements Serializable
 			
 	}
 	
-	private void saveConf(int[] conf, float energy, String filename, int[][] strandMut,
+	private void saveConf(int[] conf, double energy, String filename, int[][] strandMut,
 			boolean minimizeBB, boolean doBackrubs) {
 		// TODO Auto-generated method stub
 		applyRotamers(strandMut, conf);

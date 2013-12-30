@@ -94,15 +94,15 @@ public class BBMinimizer implements Serializable {
 	//int sysStrNum = -1; //the system strand number
 	int numberOfStrands;
 	final int numStepsFiPsi = 15; //the number of phi/psi minimization steps to be performed	
-	final float sysMaxDihedRot = 3.0f; //the maximum rotation from the initial phi/sp values
-	private float sysFiPsiStep = 0.8f; //initial step size for phi/psi changes; used for full conformation energy minimization
+	final double sysMaxDihedRot = 3.0f; //the maximum rotation from the initial phi/sp values
+	private double sysFiPsiStep = 0.8f; //initial step size for phi/psi changes; used for full conformation energy minimization
 	
-	float molCurFiPsiDisp[][] = null; //the current displacement from the initial phi/psi angle for each residue
+	double molCurFiPsiDisp[][] = null; //the current displacement from the initial phi/psi angle for each residue
 	
-	float ligRotSize = 0.5f; //initial rotation angle size (in degrees)
-	float ligTransSize = 0.5f; //initial translation size (in angstrom)
+	double ligRotSize = 0.5f; //initial rotation angle size (in degrees)
+	double ligTransSize = 0.5f; //initial translation size (in angstrom)
 	
-	float sysMaxTrans = 1.5f;//2.0f; //the maximum displacement (in angstrom) from the initial CA
+	double sysMaxTrans = 1.5f;//2.0f; //the maximum displacement (in angstrom) from the initial CA
 	private int molAtNumCA[] = null; //the molecule atom numbers for the CA atoms for each residue
 	double molStartCA[][] = null; // the position of the initial CA for each residue
 	private double molCurCA[][] = null; // the current CA coordinates for each residue
@@ -209,7 +209,7 @@ public class BBMinimizer implements Serializable {
 			molCurCA[i][2] = molStartCA[i][2];
 		}
 		
-		molCurFiPsiDisp = new float[m.numberOfResidues][2];
+		molCurFiPsiDisp = new double[m.numberOfResidues][2];
 		for (int i=0; i<molCurFiPsiDisp.length; i++){
 			molCurFiPsiDisp[i][0] = 0.0f;
 			molCurFiPsiDisp[i][1] = 0.0f;
@@ -250,13 +250,13 @@ public class BBMinimizer implements Serializable {
 		setupPartialAmber();
 		updateCurCA();
 		
-		float fiPsiStep = sysFiPsiStep;		
-		float rotStep = ligRotSize;
-		float transStep = ligTransSize;
+		double fiPsiStep = sysFiPsiStep;		
+		double rotStep = ligRotSize;
+		double transStep = ligTransSize;
 		
-		float deltaFiPsiStep = fiPsiStep/numStepsFiPsi;
-		float deltaRotStep = rotStep/numStepsFiPsi;
-		float deltaTransStep = transStep/numStepsFiPsi;
+		double deltaFiPsiStep = fiPsiStep/numStepsFiPsi;
+		double deltaRotStep = rotStep/numStepsFiPsi;
+		double deltaTransStep = transStep/numStepsFiPsi;
 		
 		Backbone bb = new Backbone();
 		
@@ -268,7 +268,7 @@ public class BBMinimizer implements Serializable {
 						
 						if( (!m.strand[str].residue[asResNum].nterm && !(asResNum==0) && a==0) ||
 								(!m.strand[str].residue[asResNum].cterm && !(asResNum==(m.strand[str].numberOfResidues-1)) && a==1) ){
-							float change = compFiPsi(asResNum,str,a,fiPsiStep,bb,pemComp);
+							double change = compFiPsi(asResNum,str,a,fiPsiStep,bb,pemComp);
 					if (Math.abs(change)>0.001){ //smaller changes should not be applies
 								bb.applyFiPsi(m,str,asResNum,change,a);
 								molCurFiPsiDisp[m.strand[str].residue[strandMut[str][j]].moleculeResidueNumber][a] += change;
@@ -286,19 +286,19 @@ public class BBMinimizer implements Serializable {
 						resNums[q] = m.strand[str].residue[q].moleculeResidueNumber;
 				
 				for (int curCoord=0; curCoord<3; curCoord++){
-						float dTrans = compTrans(resNums,resNums.length,curCoord,transStep,curTransRotInd);
+						double dTrans = compTrans(resNums,resNums.length,curCoord,transStep,curTransRotInd);
 						if (Math.abs(dTrans)!=0.0){
 							for(int k=0;k<resNums.length;k++)
 								updateCumulativeTrans(resNums[k],curCoord,dTrans,false);
 				}
 					}
 				for (int curCoord=0; curCoord<3; curCoord++){
-						float axisToRot[] = getRotVector(curCoord); //determine the axis of rotation
-						float[] myCenter = m.strand[str].getCenterOfMass();
+						double axisToRot[] = getRotVector(curCoord); //determine the axis of rotation
+						double[] myCenter = m.strand[str].getCenterOfMass();
 						double[] center = new double[3];
 						for(int j=0;j<3;j++)
 							center[j] = myCenter[j];
-						float dRot = compRot(resNums,resNums.length,rotStep,center,axisToRot,curTransRotInd);
+						double dRot = compRot(resNums,resNums.length,rotStep,center,axisToRot,curTransRotInd);
 					if (Math.abs(dRot)!=0.0)
 							for(int k=0; k<resNums.length;k++)
 								updateCumulativeRot(resNums[k],dRot,center,false,axisToRot,false);
@@ -319,10 +319,10 @@ public class BBMinimizer implements Serializable {
 	//		to determine the optimal direction of change;
 	//If at least one residue is moved further than the maximum allowed limit for its CA, then the
 	//		step in the corresponding direction is not considered
-	private float compFiPsi(int resNum, int strandNum, int angleType, float fiPsiStep, Backbone bb, boolean pemComp){
+	private double compFiPsi(int resNum, int strandNum, int angleType, double fiPsiStep, Backbone bb, boolean pemComp){
 		
 		double initialEnergy[], secondEnergy[], thirdEnergy[];
-		float storedCoord[][] = new float[m.numberOfResidues][];
+		double storedCoord[][] = new double[m.numberOfResidues][];
 		
 		//Store the actualCoordinates[] before any changes
 		for (int i=0; i<m.numberOfResidues; i++)
@@ -348,7 +348,7 @@ public class BBMinimizer implements Serializable {
 		for (int i=0; i<m.strand[strandNum].numberOfResidues; i++)
 			restoreCoord(m.strand[strandNum].residue[i].moleculeResidueNumber,storedCoord[m.strand[strandNum].residue[i].moleculeResidueNumber]);
 		
-		float step = getDir(initialEnergy[0],secondEnergy[0],thirdEnergy[0],fiPsiStep);
+		double step = getDir(initialEnergy[0],secondEnergy[0],thirdEnergy[0],fiPsiStep);
 		
 		int molResNum = m.strand[strandNum].residue[resNum].moleculeResidueNumber;
 		if (step + molCurFiPsiDisp[molResNum][angleType] > sysMaxDihedRot)
@@ -378,16 +378,16 @@ public class BBMinimizer implements Serializable {
 	
 	//Determines the direction for the translation of size transStep for
 	//		the numRes number of residues in resNums[] (molecule-relative numbering) in the direction of coord
-	private float compTrans(int resNums[], int numRes, int coord, float transStep, int AAnum){
+	private double compTrans(int resNums[], int numRes, int coord, double transStep, int AAnum){
 		
 		//determine the translation size
-		float d[] = new float[3];
+		double d[] = new double[3];
 		for (int i=0; i<d.length; i++)
 			d[i] = 0.0f;
 		d[coord] = transStep;	
 		
 		double initialEnergy[], secondEnergy[], thirdEnergy[];
-		float storedCoord[][] = new float[numRes][];
+		double storedCoord[][] = new double[numRes][];
 		
 		//Store the actualCoordinates for resNum before any changes
 		for (int i=0; i<numRes; i++)
@@ -417,7 +417,7 @@ public class BBMinimizer implements Serializable {
 	
 	//Checks if a translation of transStep in the direction of coord will move the CA of resNum further than the limit
 	//		and applies the optimal translation if (onlyCheck==false)
-	private float updateCumulativeTrans(int resNum, int coord, float transStep, boolean onlyCheck){
+	private double updateCumulativeTrans(int resNum, int coord, double transStep, boolean onlyCheck){
 		
 		updateCurCA(); //get the current CA for each residue
 		
@@ -449,14 +449,14 @@ public class BBMinimizer implements Serializable {
 				s = Math.sqrt(mt2-a[0]-a[1]);
 			
 			if (curDisp[coord]>=0)
-				transStep = (float)(-curDisp[coord] + s);
+				transStep = (double)(-curDisp[coord] + s);
 			else
-				transStep = (float)(-curDisp[coord] - s);
+				transStep = (double)(-curDisp[coord] - s);
 				
 		}
 		
 		// compute the translation to get us to the new CA
-		float theTranslation[] = new float[3];
+		double theTranslation[] = new double[3];
 		for (int i=0; i<3; i++)
 			theTranslation[i] = 0.0f;
 		theTranslation[coord] = transStep;
@@ -474,10 +474,10 @@ public class BBMinimizer implements Serializable {
 	
 	//Determines the direction for the rotation of size rotStep centered at center[], for
 	//		the numRes number of residues in resNums[]  (molecule-relative numbering) around the axisToRot axis
-	private float compRot(int resNums[], int numRes, float rotStep, double center[], float axisToRot[], int AAnum){		
+	private double compRot(int resNums[], int numRes, double rotStep, double center[], double axisToRot[], int AAnum){		
 		
 		double initialEnergy[], secondEnergy[], thirdEnergy[];
-		float storedCoord[][] = new float[numRes][];
+		double storedCoord[][] = new double[numRes][];
 		
 		//Store the actualCoordinates for resNum before any changes
 		for (int i=0; i<numRes; i++)
@@ -510,11 +510,11 @@ public class BBMinimizer implements Serializable {
 	//		the rotation is decresed so that CA is moved to the limit;
 	//If centerIsCA is true, then the center of rotation is the CA atom of residue resNum, so the rotation will not change the CA position;
 	//Only if (checkOnly==false), then the rotation is actually performed
-	private float updateCumulativeRot(int resNum, float rotStep, double center[], boolean checkOnly, float axisToRot[], boolean centerIsCA){
+	private double updateCumulativeRot(int resNum, double rotStep, double center[], boolean checkOnly, double axisToRot[], boolean centerIsCA){
 		
 		updateCurCA(); //get the current CA for each residue
 		
-		float storedCoord[] = storeCoord(resNum);
+		double storedCoord[] = storeCoord(resNum);
 		
 		m.rotateResidue(resNum, axisToRot[0], axisToRot[1], axisToRot[2], center[0], center[1], center[2], rotStep, false);
 		
@@ -546,7 +546,7 @@ public class BBMinimizer implements Serializable {
 	
 	//Performs a binary search to find a value for thetaDeg rotation that will rotate the CA for resNum to the maximum allowed limit;
 	//The initial coordinates for CA are given in coord[], the rotation is done around axis axisToRot[] and around center center[]
-	private float binSearchRotStep(double coord[], float axisToRot[], double center[], float origTheta, int resNum){
+	private double binSearchRotStep(double coord[], double axisToRot[], double center[], double origTheta, int resNum){
 		
 		double newDist;
 		
@@ -554,8 +554,8 @@ public class BBMinimizer implements Serializable {
 		for (int i=0; i<3; i++)
 			newCoord[i] = coord[i];
 		
-		float thetaDeg = origTheta;
-		float thetaStep = origTheta/2.0f;
+		double thetaDeg = origTheta;
+		double thetaStep = origTheta/2.0f;
 		
 		int curStep = 1;
 		while (Math.abs(thetaStep)>0.01){ //thetaStep can be negative
@@ -566,7 +566,7 @@ public class BBMinimizer implements Serializable {
 				return thetaDeg;
 			}
 			else {
-				thetaStep = origTheta/(float)Math.pow(2.0,curStep);
+				thetaStep = origTheta/(double)Math.pow(2.0,curStep);
 				if (newDist>sysMaxTrans)
 					thetaDeg -= thetaStep;
 				else
@@ -578,7 +578,7 @@ public class BBMinimizer implements Serializable {
 	}
 	
 	//Determines in which direction the best energy is (called by compRot() and compTrans() )
-	private float getDir(double e1, double e2, double e3, float step){
+	private double getDir(double e1, double e2, double e3, double step){
 		
 		if ((e1 > e2)&&(e1 > e3)){
 			if ((e1 - e2)>(e1 - e3))
@@ -622,11 +622,11 @@ public class BBMinimizer implements Serializable {
 		return(Math.sqrt(sum));
 	}
 	
-	public float getMaxDistCA(){
+	public double getMaxDistCA(){
 		return sysMaxTrans;
 	}
 	
-	public float getMaxDihedRot(){
+	public double getMaxDihedRot(){
 		return sysMaxDihedRot;
 	}
 	
@@ -650,9 +650,9 @@ public class BBMinimizer implements Serializable {
 	
 	//Determines the vector around which the rotation is to be performed;
 	//Currently, the vector is the coordinate axis specified by axisNum
-	public float [] getRotVector(int axisNum){
+	public double [] getRotVector(int axisNum){
 		
-		float axisToRot[] = new float[3];
+		double axisToRot[] = new double[3];
 		for (int i=0; i<axisToRot.length; i++)
 			axisToRot[i] = 0.0f;
 		axisToRot[axisNum] = 1.0f;
@@ -676,13 +676,13 @@ public class BBMinimizer implements Serializable {
 	
 	//Rotates the point with coordinates coord[] with thetaDeg degrees around the axis of rotation d[] and around center c[];
 	//Returns the new coordinates in newCoord[] and does not modify the original coordinates
-	private double [] rotatePoint(double coord[], float thetaDeg, float d[], double c[]){
+	private double [] rotatePoint(double coord[], double thetaDeg, double d[], double c[]){
 		
 		double newCoord[] = new double[3];
 		
 		double tx,ty,tz;
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
 		rM.getRotMatrix(d[0],d[1],d[2],thetaDeg,rot_mtx);
 			
@@ -690,17 +690,17 @@ public class BBMinimizer implements Serializable {
 		ty=coord[1] - c[1];
 		tz=coord[2] - c[2];
 
-		newCoord[0] = (float)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + c[0]);
-		newCoord[1] = (float)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + c[1]);
-		newCoord[2] = (float)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + c[2]);
+		newCoord[0] = (double)(tx * rot_mtx[0][0] + ty * rot_mtx[0][1] + tz * rot_mtx[0][2] + c[0]);
+		newCoord[1] = (double)(tx * rot_mtx[1][0] + ty * rot_mtx[1][1] + tz * rot_mtx[1][2] + c[1]);
+		newCoord[2] = (double)(tx * rot_mtx[2][0] + ty * rot_mtx[2][1] + tz * rot_mtx[2][2] + c[2]);
 		
 		return newCoord;
 	}
 	
 	//Returns the current actualCoordinates for residue resNum (molecule-relative numbering)
-	private float [] storeCoord(int resNum){
+	private double [] storeCoord(int resNum){
 		
-		float storedCoord[] = new float[m.residue[resNum].numberOfAtoms * 3];
+		double storedCoord[] = new double[m.residue[resNum].numberOfAtoms * 3];
 		for (int i=0; i<m.residue[resNum].numberOfAtoms; i++){
 			
 			int curAtom = m.residue[resNum].atom[i].moleculeAtomNumber;
@@ -712,7 +712,7 @@ public class BBMinimizer implements Serializable {
 	}
 	
 	//Sets the actualCoordinates for residue resNum (molecule-relative numbering) to the ones in storedCoord[]
-	private void restoreCoord(int resNum, float storedCoord[]){
+	private void restoreCoord(int resNum, double storedCoord[]){
 		
 		for (int i=0; i<m.residue[resNum].numberOfAtoms; i++){
 			

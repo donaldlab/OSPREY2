@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	Perturbation.java
@@ -53,12 +53,13 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.Serializable;
 import java.util.*;
 
 
-public abstract class Perturbation {
+public abstract class Perturbation implements Serializable {
 //Extended by classes like Shear, Backrub
-    //Each perturbation has a single parameter of type float
+    //Each perturbation has a single parameter of type double
     //However, discrete perturbations may admit as few as two discrete values of this parameter
     //Perturbations can move any number of residues, but must treat the sidechain as a rigid body
     //and should not mess with chi1 (the idea of perturbations is to be orthogonal to the SC-only adjustments)
@@ -67,11 +68,11 @@ public abstract class Perturbation {
 
     String type;//e.g. "Shear"
     Molecule m;//The affected molecule
-    int resAffected[];//Molecule-based numbers of affected residues
+    int resDirectlyAffected[];//Molecule-based numbers of affected residues
 
-    float minParams[];//The minimum parameter value for each state of this perturbation
+    double minParams[];//The minimum parameter value for each state of this perturbation
     //(Or the only one if this is a discrete perturbation or a discrete state: then minParams[number] and maxaParams[number] will be the same)
-    float maxParams[];//The maximum parameter value for each state of this perturbation
+    double maxParams[];//The maximum parameter value for each state of this perturbation
     //The first perturbation state is always the unperturbed state: generally this means minParams[0] == maxParams[0] == 0
     //But it can also mean minParams=-a, maxParams=a for some small a (StrandRCs.applyPertState applies 0 for this state  when trying to save time for invalid perturbation states)
     //These states will be incoporated into RCs
@@ -79,7 +80,7 @@ public abstract class Perturbation {
     int curState = 0;//The current state of the perturbation (index in minParams, maxParams)
     //Starts out unperturbed.  This state will be changed by StrandRCs.applyRC and implemented in the actualCoordinates and Atom.coord array
 
-    float curParam = 0;//The current parameter value of the perturbation.  This is changed by applyPerturbation and may be only implemented in the actualCoordinates
+    double curParam = 0;//The current parameter value of the perturbation.  This is changed by applyPerturbation and may be only implemented in the actualCoordinates
 
     //The current PMinimizer assumes that minimized perturbations commute with sidechain dihedral changes
     //(as all backbone perturbations that treat the sidechain as a rigid body do)
@@ -90,17 +91,23 @@ public abstract class Perturbation {
 
     int[] predecessors;//Similarly, these indices in m.perts are perturbations that need to be applied before this one because they affect its state
 
-    ArrayList<HashMap<String, float[]>> oldCoords;//Old coordinates to revert to upon undoing
+    ArrayList<HashMap<String, double[]>> oldCoords;//Old coordinates to revert to upon undoing
 
     static boolean idealizeSC = true;//Should sidechains be idealized?
 
+    boolean invalidState = false;//Indicates that the perturbation is in an invalid state
+    //(e.g. a loop closure adjustment was applied with an impossible parameter)
+    //in this case the energy should be set to infinity
 
+
+    boolean explicitUnperturbed = false;//Indicates doPerturbationMotion should be called for the unperturbed state
+    //(used for LoopClosureAdjustments after PeptideTranslations or Rotations to close the BB)
 
 //******Applying perturbations********
 
 //These functions apply perturbations to all affected residues, in the m.actualCoordinates
     
-    abstract public boolean doPerturbationMotion(float param);
+    abstract public boolean doPerturbationMotion(double param);
     //This function should apply the actual perturbation motion to the actualCoordinates
     //True indicates success; false indicates failure (the perturbation cannot be and thus is not applied)
 
@@ -108,23 +115,23 @@ public abstract class Perturbation {
  //(Easier to just apply with known parameter)
 
 
-    public boolean applyPerturbation(float param){
+    public boolean applyPerturbation(double param){
         //Apply the perturbation with a given value of the perturbation parameter
     //This operation can be reversed by undo(). It should be undoable even if dihedrals have been changed.
         //Because we only change the actualCoordinates here we do not update the curState in this function, just the curParam
 
 
-        if( param == 0 ){//Unperturbed state
+        if( (param == 0) && !(explicitUnperturbed) ){//Unperturbed state requiring no action
             curParam = 0;
             return true;
         }
         else{
             //First store information needed to undo
-            oldCoords = new ArrayList<HashMap<String, float[]>>(resAffected.length);
+            oldCoords = new ArrayList<HashMap<String, double[]>>(resDirectlyAffected.length);
             double genChi1[] = getGenChi1();//Note the generalized chi1 for each residue so we can restore it after the perturbation
 
-            for(int a=0;a<resAffected.length;a++)
-                oldCoords.add(a, storeResBB(m.residue[resAffected[a]]) );
+            for(int a=0;a<resDirectlyAffected.length;a++)
+                oldCoords.add(a, storeResBB(m.residue[resDirectlyAffected[a]]) );
 
             boolean outcome = doPerturbationMotion(param);
 
@@ -148,26 +155,113 @@ public abstract class Perturbation {
 
     //This function undoes this perturbation's successor perturbations and then this one itself,
     //then applies the new value and reapplies the successors
-    public void changePerturbationParameter(float param){
+    //SLOW VERSION THAT REPEATS SIDECHAIN IDEALIZATION, ETC
+    /*public void changePerturbationParameter(double param){
         for(int a=successors.length-1; a>=0; a--)
             m.perts[successors[a]].undo();
         undo();
         applyPerturbation(param);
         for(int a=0;a<successors.length;a++)
             m.perts[successors[a]].applyPerturbation(m.perts[successors[a]].curParam);
+    }*/
+    //FASTER VERSION
+    public void changePerturbationParameter(double param){
+
+        HashMap<Integer,Double> SCList = new HashMap<Integer,Double>();//sidechains to reidealize and their chi1s
+
+        for( int sn : successors ){
+            Perturbation s = m.perts[sn];
+            if(s.curParam!=0 || (s.explicitUnperturbed && s.oldCoords!=null)){//a motion was performed for the successor
+                for(int molResNum : s.resDirectlyAffected)
+                    SCList.put(molResNum, 0.);
+            }
+        }
+
+        for(int molResNum : resDirectlyAffected)//Get this perturbation's directly affected residues too
+            SCList.put(molResNum, 0.);
+
+        
+        for( int molResNum : SCList.keySet() )
+            SCList.put(molResNum, getGenChi1(m,molResNum));
+        
+
+        //undoing successors
+        for(int a=successors.length-1; a>=0; a--){
+            Perturbation s = m.perts[successors[a]];
+            if(s.curParam!=0 || (s.explicitUnperturbed && s.oldCoords!=null)){//a motion was performed for the successor
+                for(int b=0;b<s.resDirectlyAffected.length;b++)
+                    s.restoreResBB( m.residue[s.resDirectlyAffected[b]], s.oldCoords.get(b) );
+            }
+        }
+
+        //undoing this perturbation
+        if(curParam!=0 || (explicitUnperturbed && oldCoords!=null)){//a motion was performed for this
+            for(int b=0;b<resDirectlyAffected.length;b++)
+                restoreResBB( m.residue[resDirectlyAffected[b]], oldCoords.get(b) );
+        }
+
+
+        //Now apply the perturbations again, without SC motion
+        if( (param == 0) && !(explicitUnperturbed) )//Unperturbed state requiring no action
+            curParam = 0;
+        else{
+            //First store information needed to undo
+            oldCoords = new ArrayList<HashMap<String, double[]>>(resDirectlyAffected.length);
+
+            for(int a=0;a<resDirectlyAffected.length;a++)
+                oldCoords.add(a, storeResBB(m.residue[resDirectlyAffected[a]]) );
+
+            boolean outcome = doPerturbationMotion(param);
+
+            if(outcome)
+                curParam = param;
+            else//Failed to apply perturbation
+                curParam=0;
+        }
+        
+        for(int a=0;a<successors.length;a++){
+            
+            Perturbation s = m.perts[successors[a]];
+            
+            if( (s.curParam == 0) && !(s.explicitUnperturbed) )//Unperturbed state requiring no action
+                s.curParam = 0;
+            else{
+                //First store information needed to undo
+                s.oldCoords = new ArrayList<HashMap<String, double[]>>(s.resDirectlyAffected.length);
+
+                for(int b=0;b<s.resDirectlyAffected.length;b++)
+                    s.oldCoords.add(b, storeResBB(m.residue[s.resDirectlyAffected[b]]) );
+
+                if(!s.doPerturbationMotion(s.curParam))
+                    s.curParam = 0;
+            }
+        }
+
+
+        //Re-idealize sidechains and restore chi1 angles
+        for( int molResNum : SCList.keySet() ){
+
+            if(idealizeSC){
+                Residue res = m.residue[molResNum];
+                if( m.strand[res.strandNumber].isProtein )
+                    m.idealizeResSidechain(res);
+            }
+
+            setGenChi1(m, molResNum, SCList.get(molResNum));
+        }
     }
 
 
     public void undo(){//Undo the perturbation as it was most recently applied
         //We do not update the curParam now because we will typically reapply the perturbation shortly, often with the same parameter value
 
-        if(curParam==0)//Nothing to do
+        if(curParam==0 && (!explicitUnperturbed || oldCoords==null))//Nothing to do
             return;
 
         double[] genChi1 = getGenChi1();
 
-        for(int a=0;a<resAffected.length;a++)
-            restoreResBB( m.residue[resAffected[a]], oldCoords.get(a) );
+        for(int a=0;a<resDirectlyAffected.length;a++)
+            restoreResBB( m.residue[resDirectlyAffected[a]], oldCoords.get(a) );
 
         setGenChi1(genChi1);
 
@@ -178,8 +272,14 @@ public abstract class Perturbation {
     //Return a step size for the minimizer to use when optimizing this perturbation
     //This should be overridden for any continuous perturbations...discrete perturbation cannot be minimized
     //so they don't need to override this (the returned value will not be used)
-    public float getStepSizeForMinimizer(){
-        return Float.NaN;
+    public double getStepSizeForMinimizer(){
+        return Double.NaN;
+    }
+
+    //Give a mesh width to use for a FuncLBTerm depending on this perturbation's parameter
+    //Also needs to be overridden for continuous perturbations only
+    public double getMeshWidth(){
+        return Double.NaN;
     }
 
     abstract public void setDefaultParams();//Set up the default perturbation states
@@ -219,7 +319,7 @@ public abstract class Perturbation {
 
         else if(type.equalsIgnoreCase("PROLINE FLIP"))
             return new ProlineFlip(m, resList);
-        
+
         else{//not clear
             System.err.println("Perturbation type not identified: " + type);
             System.exit(1);
@@ -363,8 +463,8 @@ public abstract class Perturbation {
         boolean outcome = true;
 
         //This modifies the actualCoordinates (like applyPerturbation)
-        for(int a=0;a<resAffected.length;a++){
-            Residue res = m.residue[resAffected[a]];
+        for(int a=0;a<resDirectlyAffected.length;a++){
+            Residue res = m.residue[resDirectlyAffected[a]];
             if( m.strand[res.strandNumber].isProtein )
                 outcome = outcome && m.idealizeResSidechain(res);
         }
@@ -376,9 +476,9 @@ public abstract class Perturbation {
     public double[] getGenChi1(){//Get the generalized chi1 for each residue to make sure the perturbation does not change it
         //(This is either the real chi1 or another N-CA-CB-something dihedral to keep the SC oriented right)
 
-        double ans[] = new double[resAffected.length];
-        for(int a=0;a<resAffected.length;a++)
-            ans[a] = getGenChi1(m, resAffected[a]);
+        double ans[] = new double[resDirectlyAffected.length];
+        for(int a=0;a<resDirectlyAffected.length;a++)
+            ans[a] = getGenChi1(m, resDirectlyAffected[a]);
 
         return ans;
     }
@@ -411,8 +511,8 @@ public abstract class Perturbation {
 
     public void setGenChi1(double ang[]){//Set each residue's generalized chi1 to the specified values
 
-        for(int a=0;a<resAffected.length;a++)
-            setGenChi1(m, resAffected[a], ang[a]);
+        for(int a=0;a<resDirectlyAffected.length;a++)
+            setGenChi1(m, resDirectlyAffected[a], ang[a]);
     }
 
 
@@ -480,15 +580,15 @@ public abstract class Perturbation {
                 return "CG";
     }
 
-    public HashMap<String, float[]> storeResBB( Residue res ){
+    public HashMap<String, double[]> storeResBB( Residue res ){
         return storeResBB( res, m );
     }
 
-    public HashMap<String, float[]> storeResBB(Residue res, Molecule molec){
+    public HashMap<String, double[]> storeResBB(Residue res, Molecule molec){
         //Store the residue's backbone coordinates and sidechain orientation in a hashmap
         //We allow it to store from a different molecule because structure-switching perturbation need to do that
 
-        HashMap<String, float[]> resCoord = new HashMap<String, float[]>();
+        HashMap<String, double[]> resCoord = new HashMap<String, double[]>();
 
 
         Atom CA = res.getAtomByName("CA");
@@ -498,16 +598,40 @@ public abstract class Perturbation {
             if( at.isBBatom || at.name.contains("HA") ||        //backbone atom or alpha hydrogen
                    ( res.name.equalsIgnoreCase("PRO") && at.name.equalsIgnoreCase("CD") ) ){//or proline CD (treated like part of the backbone, as an amide H would be)
                 //Also we store coordinates for all atoms in proline because it doesn't have adjustable dihedrals
-                float coords[] = new float[3];
+                double coords[] = new double[3];
                 System.arraycopy( molec.actualCoordinates, 3*at.moleculeAtomNumber, coords, 0, 3);
                 resCoord.put(at.name, coords);
             }
             else if( at.name.equalsIgnoreCase("CB") ){
-                float coords[] = new float[3];
+                double coords[] = new double[3];
                 for(int c=0;c<3;c++)
                     coords[c] = molec.actualCoordinates[ 3*at.moleculeAtomNumber + c ]
                             - molec.actualCoordinates[ 3*CA.moleculeAtomNumber + c ] ;
                 resCoord.put("CACB", coords);//Vector from CA to CB
+            }
+        }
+
+        //If the strand containing the residue translates and rotates, we will store these coordinates in
+        //the untranslated & unrotated reference frame (so that we can undo a perturbation even if the
+        //strand has been moved as a rigid body in the interim)
+        Strand resStrand = molec.strand[res.strandNumber];
+        if(resStrand.rotTrans && resStrand.curTrans != null){
+            //if resStrand.curTrans is null (or equivalently,
+            //any of resStrand.{curRotAngles,curRotMatrix,strStartCOM} is null)
+            //the strand is in its original reference frame
+
+            RotMatrix r = new RotMatrix();
+            //Find current center of strand
+            double curCenter[] = r.add( resStrand.strStartCOM, resStrand.curTrans);
+            double initCenter[] = resStrand.strStartCOM;//center in initial reference frame
+
+            for( String s : resCoord.keySet() ){
+
+                double[] newCoords = r.subtract( resCoord.get(s), curCenter );//Get atom position relative to center of strand
+                newCoords = r.unapplyRotMatrix(resStrand.curRotMatrix, newCoords);//Rotate to initial frame
+                newCoords = r.add( newCoords , initCenter );//Convert back to absolute position, using initial center
+
+                resCoord.put(s, newCoords);
             }
         }
 
@@ -517,24 +641,49 @@ public abstract class Perturbation {
     
     
     
-    public void restoreResBB( Residue res, HashMap<String, float[]> resCoord ){
+    public void restoreResBB( Residue res, HashMap<String, double[]> resCoord ){
         //Restore the residue's backbone coordinates and sidechain orientation as indicated by the hashmap
 
+
+        Strand resStrand = m.strand[res.strandNumber];
+        if(resStrand.rotTrans && resStrand.curTrans != null){
+            //deal with rotations/translations that might have happened since BB coordinates were recorded
+
+            HashMap<String,double[]> newFrameCoord = new HashMap<String,double[]>();
+
+            RotMatrix r = new RotMatrix();
+            //Find current center of strand
+            double curCenter[] = r.add( resStrand.strStartCOM, resStrand.curTrans );
+            double initCenter[] = resStrand.strStartCOM;//center in initial reference frame
+
+            for( String s : resCoord.keySet() ){
+
+                double[] newCoords = r.subtract( resCoord.get(s), initCenter );//Get atom position relative to center of strand
+                newCoords = r.applyRotMatrix(resStrand.curRotMatrix, newCoords);//Rotate to current frame
+                newCoords = r.add( newCoords , curCenter );//Convert back to absolute position, using current center
+
+                newFrameCoord.put(s, newCoords);
+            }
+
+            resCoord = newFrameCoord;//This will make sure we don't mess up the original resCoord hashmap (might be needed again in the initial reference frame)
+        }
+
+
         RotMatrix r = new RotMatrix();
-        float SC_mtx[][] = new float[3][3], origCA[] = new float[3], curCA[] = new float[3];
+        double SC_mtx[][] = new double[3][3], origCA[] = new double[3], curCA[] = new double[3];
 
         if( res.name.equalsIgnoreCase("gly") && resCoord.containsKey("CACB") ){//There's been a mutation to glycine since the coordinates were stored
             //This might happen in a structure switch for example.  
-            float CAHA[] = r.scale( resCoord.get("CACB"), 0.716f);//This is 1.1/1.536: based on Molecule.idealizeResSidechain
-            float HA3[] = r.add(CAHA, resCoord.get("CA") );
+            double CAHA[] = r.scale( resCoord.get("CACB"), 0.716f);//This is 1.1/1.536: based on Molecule.idealizeResSidechain
+            double HA3[] = r.add(CAHA, resCoord.get("CA") );
             resCoord.put("HA3", HA3 );
             resCoord.put( "HA2", resCoord.get("HA") );
             resCoord.remove("CACB");//Remove the CACB vector so the sidechain restoration routine is not called
         }
 
         else if ( ( ! res.name.equalsIgnoreCase("gly") ) && ( ! resCoord.containsKey("CACB") ) ){//There's been a mutation away from glycine
-            float HA[] = resCoord.get("HA3");
-            float CACB[] = r.scale( r.subtract( HA, resCoord.get("CA") ) , 1.396f );//1.536/1.1
+            double HA[] = resCoord.get("HA3");
+            double CACB[] = r.scale( r.subtract( HA, resCoord.get("CA") ) , 1.396f );//1.536/1.1
             resCoord.put("CACB", CACB);
             resCoord.put( "HA", resCoord.get("HA2") );
         }
@@ -542,16 +691,16 @@ public abstract class Perturbation {
 
         if( res.name.equalsIgnoreCase("PRO") && ( ! resCoord.containsKey("CD") ) ){//There's been a mutation to proline since the coordinates were stored
             //This might happen in a structure switch for example.
-            float NCD[] = r.subtract( resCoord.get("H"), resCoord.get("N") );
+            double NCD[] = r.subtract( resCoord.get("H"), resCoord.get("N") );
             NCD = r.scale( NCD, getIdealNHCD("PRO") / r.norm(NCD) );
-            float CD[] = r.add( NCD, resCoord.get("N") );
+            double CD[] = r.add( NCD, resCoord.get("N") );
             resCoord.put("CD", CD );
         }
 
         else if ( ( ! res.name.equalsIgnoreCase("PRO") ) && ( ! resCoord.containsKey("H") ) ){//There's been a mutation from proline
-            float NH[] = r.subtract( resCoord.get("CD"), resCoord.get("N") );
+            double NH[] = r.subtract( resCoord.get("CD"), resCoord.get("N") );
             NH = r.scale( NH, getIdealNHCD(res.name) / r.norm(NH) );
-            float H[] = r.add( NH, resCoord.get("N") );
+            double H[] = r.add( NH, resCoord.get("N") );
             resCoord.put("H", H);
         }
 
@@ -559,23 +708,23 @@ public abstract class Perturbation {
         if( resCoord.containsKey("CACB") ){//We have a sidechain to restore
             origCA = resCoord.get("CA");//original (and thus post-undoing) CA coordinates
             curCA = m.getActualCoord( m.getMoleculeAtomNumber("CA", res.moleculeResidueNumber ) );//Current (pre-undoing) CA coordinates
-            float origCACB[] = resCoord.get("CACB");
-            float curCACB[] = r.subtract( m.getActualCoord( m.getMoleculeAtomNumber("CB", res.moleculeResidueNumber ) ) , curCA );
+            double origCACB[] = resCoord.get("CACB");
+            double curCACB[] = r.subtract( m.getActualCoord( m.getMoleculeAtomNumber("CB", res.moleculeResidueNumber ) ) , curCA );
 
             //Create a matrix for rotating curCACB to origCACB (to superimpose the CBs)
             //Axis for this will be curCACB X origCACB (sign for this will give an angle < 180 degrees)
             //This is based on RotMatrix.getSuperposingRotMatrix
-            float axis1[] = r.cross(curCACB, origCACB);
+            double axis1[] = r.cross(curCACB, origCACB);
             if( r.norm(axis1) == 0 ){//uold and unew are collinear
                 if( r.dot(curCACB, origCACB) > 0 )//uold and unew are already superimposed
                     SC_mtx = r.identity();
                 else{//Need a 180-degree rotation.
-                    float normal[] = r.getPerpendicular(curCACB);
+                    double normal[] = r.getPerpendicular(curCACB);
                     r.getRotMatrix( normal[0], normal[1], normal[2], 180, SC_mtx );
                 }
             }
             else{
-                float th = r.getAngle(curCACB, origCACB);//angle of this first rotation
+                double th = r.getAngle(curCACB, origCACB);//angle of this first rotation
                 r.getRotMatrixRad(axis1[0], axis1[1], axis1[2], th, SC_mtx);//Rotation matrix for the sidechain
             }
 
@@ -584,12 +733,12 @@ public abstract class Perturbation {
         for(int b=0;b<res.atom.length;b++){//Now put the coordinates back
             Atom at = res.atom[b];
             if( resCoord.containsKey(at.name) ){//Restore the old coordinates exactly
-                float coords[] = resCoord.get(at.name);
+                double coords[] = resCoord.get(at.name);
                 System.arraycopy( coords, 0, m.actualCoordinates, 3*at.moleculeAtomNumber, 3);
             }
             else{//Use SC_mtx to get it back in place
-                float curCoords[] = m.getActualCoord( at.moleculeAtomNumber );
-                float undoneCoords[] = r.add ( origCA, r.applyRotMatrix(SC_mtx, r.subtract(curCoords, curCA) ) );
+                double curCoords[] = m.getActualCoord( at.moleculeAtomNumber );
+                double undoneCoords[] = r.add ( origCA, r.applyRotMatrix(SC_mtx, r.subtract(curCoords, curCA) ) );
                 System.arraycopy( undoneCoords, 0, m.actualCoordinates, 3*at.moleculeAtomNumber, 3);
             }
         }
@@ -652,12 +801,12 @@ public abstract class Perturbation {
  */
 
 
-    private float getIdealNHCD(String resType){
+    private double getIdealNHCD(String resType){
         //Returns the ideal N-H bond length for the given residue type (or N-CD for Pro)
         //Used in coordinate restoration with changes to and from proline
         Residue ideal = new Amber96PolyPeptideResidue().getResidue(resType);
-        float N[] = ideal.getAtomByName("N").coord;
-        float HCD[];
+        double N[] = ideal.getAtomByName("N").coord;
+        double HCD[];
         if(resType.equalsIgnoreCase("PRO"))
             HCD = ideal.getAtomByName("CD").coord;
         else
@@ -666,6 +815,11 @@ public abstract class Perturbation {
         RotMatrix rm = new RotMatrix();
         return rm.norm( rm.subtract(N, HCD) );
     }
+    
+    
+    
+    public abstract boolean isParamAngle();
+    //is the perturbation parameter an angle?
 
 
 

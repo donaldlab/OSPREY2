@@ -1,8 +1,8 @@
 /*
 	This file is part of OSPREY.
 
-	OSPREY Protein Redesign Software Version 2.1 beta
-	Copyright (C) 2001-2012 Bruce Donald Lab, Duke University
+	OSPREY Protein Redesign Software Version 1.0
+	Copyright (C) 2001-2009 Bruce Donald Lab, Duke University
 
 	OSPREY is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Lesser General Public License as
@@ -36,21 +36,13 @@
 			USA
 			e-mail:   www.cs.duke.edu/brd/
 
-	<signature of Bruce Donald>, Mar 1, 2012
+	<signature of Bruce Donald>, 12 Apr, 2009
 	Bruce Donald, Professor of Computer Science
 */
 
-///////////////////////////////////////////////////////////////////////////////////////////////
-//	DEEGoldsteinTriples.java
-//
-//	Version:           2.1 beta
-//
-//
-//	  authors:
-// 	  initials    name                 organization                email
-//	 ---------   -----------------    ------------------------    ----------------------------
-//	  MAH           Mark A. Hallen	  Duke University               mah43@duke.edu
-///////////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * Adapted from DEEGoldstein.java, DEEGoldsteinPairs.java, DEEIndirect.java by Mark Hallen, Mar. 2011
+*/
 
 /**
  * Pruned triples of rotamers (for "renormalized residues" as referred to by Goldstein 1994)
@@ -73,11 +65,11 @@ public class DEEGoldsteinTriples extends DEE {
         int numPrunedMin = 0;
 
 	//constructor
-	DEEGoldsteinTriples (PairwiseEnergyMatrix arpMatrix, int numResMutable, int strMut[][], float initEw,
+	DEEGoldsteinTriples (PairwiseEnergyMatrix arpMatrix, int numResMutable, int strMut[][], double initEw,
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean residueMut[],
 			boolean doMin, boolean spFlags[][][][][][], boolean mb, int mbNum, boolean dDEE,
                         boolean minBB, int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE,
-                        float aIval, boolean tripFlags[][][][][][][][][], boolean doPerts) {
+                        double aIval, boolean tripFlags[][][][][][][][][], boolean doPerts) {
 
             
                 init(arpMatrix, null, numResMutable,
@@ -354,7 +346,7 @@ public class DEEGoldsteinTriples extends DEE {
                 int strResNumj=strandMut[strj][mutRes2MutIndex[posj]];
 
 
-                float minTerm = Float.POSITIVE_INFINITY;//This will be the minimum over the witness rotamers at posj of E(candidate, witness) - E(competitor, witness)
+                double minTerm = Double.POSITIVE_INFINITY;//This will be the minimum over the witness rotamers at posj of E(candidate, witness) - E(competitor, witness)
 
                 for(int AAs=0; AAs<numAAtypes[posj]; AAs++){
                     int sAA = strandRot[strj].getIndexOfNthAllowable(strResNumj,AAs);
@@ -374,7 +366,7 @@ public class DEEGoldsteinTriples extends DEE {
                             continue;
 
 
-                        float checkMin = pairwiseMinEnergyMatrix.getPairwiseE( pos1, r1AA, r1Rot, posj, sAA, sRot )
+                        double checkMin = pairwiseMinEnergyMatrix.getPairwiseE( pos1, r1AA, r1Rot, posj, sAA, sRot )
                                 - pairwiseMinEnergyMatrix.getPairwiseE( pos1, t1AA, t1Rot, posj, sAA, sRot )
                                 + pairwiseMinEnergyMatrix.getPairwiseE( pos2, r2AA, r2Rot, posj, sAA, sRot )
                                 - pairwiseMinEnergyMatrix.getPairwiseE( pos2, t2AA, t2Rot, posj, sAA, sRot )
@@ -387,7 +379,7 @@ public class DEEGoldsteinTriples extends DEE {
                 }
 
 
-                if(minTerm == Float.POSITIVE_INFINITY)
+                if(minTerm == Double.POSITIVE_INFINITY)
                     return true;//The candidate triple can be pruned because it is incompatible with all rotamers at posj
                 
                 checkSum += minTerm;
@@ -411,10 +403,10 @@ public class DEEGoldsteinTriples extends DEE {
         //Find the magicBulletNum "best" triples at the specified position with respect to internal energy plus maximum sum of pairwise energy with other positions
         //Similar to what Gordon and Mayo 1999 do for pairs but with magicBulletNum instead of just 1 magic bullets
 
-            float bestEnergies[] = new float[magicBulletNum];
+            double bestEnergies[] = new double[magicBulletNum];
 
             for(int a=0; a<magicBulletNum; a++){
-                bestEnergies[a] = Float.POSITIVE_INFINITY;
+                bestEnergies[a] = Double.POSITIVE_INFINITY;
                 for(int b=0; b<3; b++){
                     magicBulletAA[a][b] = -1;
                     magicBulletRot[a][b] = -1;
@@ -464,7 +456,7 @@ public class DEEGoldsteinTriples extends DEE {
 
 
                                                                 //This quantity is similar to the pruning condition but is just being evaluated for the single triple rather than comparing two
-                                                                float checkSum = 0;
+                                                                double checkSum = 0;
 
                                                                 //Energies of the individual rotamers
                                                                 checkSum += pairwiseMinEnergyMatrix.getIntraAndShellE( curPos1, curAA1, curRot1 ) 	//intra and shell energies: 1st residue
@@ -489,7 +481,7 @@ public class DEEGoldsteinTriples extends DEE {
                                                                     int strResNumj=strandMut[strj][mutRes2MutIndex[posj]];
 
 
-                                                                    float maxTerm = Float.NEGATIVE_INFINITY;//This will be the maximum over the witness rotamers at posj of E(triple, witness)
+                                                                    double maxTerm = Double.NEGATIVE_INFINITY;//This will be the maximum over the witness rotamers at posj of E(triple, witness)
 
                                                                     for(int AAs=0; AAs<numAAtypes[posj]; AAs++){
                                                                         int sAA = strandRot[strj].getIndexOfNthAllowable(strResNumj,AAs);
@@ -508,18 +500,18 @@ public class DEEGoldsteinTriples extends DEE {
                                                                                 || isPrunedTriple( curPos2, curAA2, curRot2, curPos3, curAA3, curRot3, posj, sAA, sRot ) )//Don't consider rotamers incompatible with the candidate triple
                                                                             continue;
 
-                                                                            float checkMax = pairwiseMinEnergyMatrix.getPairwiseE( curPos1, curAA1, curRot1, posj, sAA, sRot )
+                                                                            double checkMax = pairwiseMinEnergyMatrix.getPairwiseE( curPos1, curAA1, curRot1, posj, sAA, sRot )
                                                                                     + pairwiseMinEnergyMatrix.getPairwiseE( curPos2, curAA2, curRot2, posj, sAA, sRot )
                                                                                     + pairwiseMinEnergyMatrix.getPairwiseE( curPos3, curAA3, curRot3, posj, sAA, sRot );
 
-                                                                            if ( ( checkMax > maxTerm ) && ( checkMax != Float.POSITIVE_INFINITY ) )//Parametrically incompatible conformations not counted
+                                                                            if ( ( checkMax > maxTerm ) && ( checkMax != Double.POSITIVE_INFINITY ) )//Parametrically incompatible conformations not counted
                                                                                     maxTerm = checkMax;
                                                                         }
                                                                     }
 
 
-                                                                    if(maxTerm == Float.NEGATIVE_INFINITY){
-                                                                        checkSum = Float.POSITIVE_INFINITY;//This triple should not be used as a magic bullet
+                                                                    if(maxTerm == Double.NEGATIVE_INFINITY){
+                                                                        checkSum = Double.POSITIVE_INFINITY;//This triple should not be used as a magic bullet
                                                                         break;
                                                                     }
 
@@ -631,11 +623,11 @@ public class DEEGoldsteinTriples extends DEE {
         
 
 
-        private int argmax(float[] x){
+        private int argmax(double[] x){
             //Return the index of the biggest element in x
             //(If it's a tie return the first of the tied indices)
 
-            float max = Float.NEGATIVE_INFINITY;
+            double max = Double.NEGATIVE_INFINITY;
             int argMax = 0;
 
             for(int a=0; a<x.length; a++){

@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	RamachandranChecker.java
@@ -61,7 +61,7 @@ import java.util.StringTokenizer;
 public class RamachandranChecker {
 
 
-    float[][][] tables;//tables[a][b][c] is density at phi=b+/-1, psi=c+/-1
+    double[][][] tables;//tables[a][b][c] is density at phi=b+/-1, psi=c+/-1
     //with a=0 is for gly, a=1 for pro, a=2 for general, and a=3 for pre-pro
 
 //This class is designed to read the Richardsons' top500 Ramachandran plot density data:
@@ -73,7 +73,7 @@ public class RamachandranChecker {
 
 
 
-    static float denCutoff = 0.02f;//Cutoff density for being allowed
+    static double denCutoff = 0.02f;//Cutoff density for being allowed
 
     private RamachandranChecker() {
         
@@ -90,7 +90,7 @@ public class RamachandranChecker {
 
     public void readInputFiles(String[] fileNames){//Filenames in order: gly, pro, general, pre-pro
 
-        tables = new float[4][180][180];
+        tables = new double[4][180][180];
 
         for(int a=0;a<4;a++){
 
@@ -109,7 +109,7 @@ public class RamachandranChecker {
                         st.nextToken();
                         st.nextToken();
 
-                        tables[a][phiBin][psiBin] = Float.valueOf(st.nextToken());
+                        tables[a][phiBin][psiBin] = Double.valueOf(st.nextToken());
 
                         line = br.readLine();
                     }
@@ -143,7 +143,7 @@ public class RamachandranChecker {
             return ans;
         }
 
-        float phiPsi[] = getPhiPsi(m, resNum);
+        double phiPsi[] = getPhiPsi(m, resNum);
 
         for(int a=0;a<3;a++)
             ans[a] = checkAngles(phiPsi[0], phiPsi[1], a);
@@ -159,17 +159,17 @@ public class RamachandranChecker {
             return true;
         //If we're checking for pre-pro the residue should not be at a C-terminus
 
-        float phiPsi[] = getPhiPsi(m, resNum);
+        double phiPsi[] = getPhiPsi(m, resNum);
 
         return checkAngles(phiPsi[0], phiPsi[1], 3);
     }
 
     
     //Returns {phi,psi}.  resNum is a molecule residue number.
-    public float[] getPhiPsi(Molecule m, int resNum){
+    public double[] getPhiPsi(Molecule m, int resNum){
 
         Residue res = m.residue[resNum];
-        float ans[] = new float[2];
+        double ans[] = new double[2];
 
         //Get coordinates of relevant atoms
         Atom CLast = new Atom( m.getActualCoord( m.residue[ resNum-1 ].getAtomNameToMolnum("C") ) );
@@ -177,19 +177,19 @@ public class RamachandranChecker {
         Atom CACur = new Atom( m.getActualCoord( res.getAtomNameToMolnum("CA") ) );
         Atom CCur = new Atom( m.getActualCoord( res.getAtomNameToMolnum("C") ) );
         Atom NNext = new Atom( m.getActualCoord( m.residue[ resNum+1 ].getAtomNameToMolnum("N") ) );
-        ans[0] = (float)CCur.torsion(CLast, NCur, CACur);//phi
-        ans[1] = (float)NNext.torsion(NCur, CACur, CCur);//psi
+        ans[0] = (double)CCur.torsion(CLast, NCur, CACur);//phi
+        ans[1] = (double)NNext.torsion(NCur, CACur, CCur);//psi
 
         return ans;
     }
 
 
 
-    public boolean checkAngles(float phi, float psi, int plotNum){
+    public boolean checkAngles(double phi, double psi, int plotNum){
 
         int phiBin = (int)((phi+180)/2);
         int psiBin = (int)((psi+180)/2);
-        float den = tables[plotNum][phiBin][psiBin];
+        double den = tables[plotNum][phiBin][psiBin];
         if(den > denCutoff)
             return true;
         else

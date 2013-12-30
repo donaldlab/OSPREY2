@@ -1,56 +1,12 @@
 /*
-	This file is part of OSPREY.
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
 
-	OSPREY Protein Redesign Software Version 2.1 beta
-	Copyright (C) 2001-2012 Bruce Donald Lab, Duke University
-
-	OSPREY is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Lesser General Public License as
-	published by the Free Software Foundation, either version 3 of
-	the License, or (at your option) any later version.
-
-	OSPREY is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-	GNU Lesser General Public License for more details.
-
-	You should have received a copy of the GNU Lesser General Public
-	License along with this library; if not, see:
-	      <http://www.gnu.org/licenses/>.
-
-	There are additional restrictions imposed on the use and distribution
-	of this open-source code, including: (A) this header must be included
-	in any modification or extension of the code; (B) you are required to
-	cite our papers in any publications that use this code. The citation
-	for the various different modules of our software, together with a
-	complete list of requirements and restrictions are found in the
-	document license.pdf enclosed with this distribution.
-
-	Contact Info:
-			Bruce Donald
-			Duke University
-			Department of Computer Science
-			Levine Science Research Center (LSRC)
-			Durham
-			NC 27708-0129
-			USA
-			e-mail:   www.cs.duke.edu/brd/
-
-	<signature of Bruce Donald>, Mar 1, 2012
-	Bruce Donald, Professor of Computer Science
-*/
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-//	DEE.java
-//
-//	Version:           2.1 beta
-//
-//
-//	  authors:
-// 	  initials    name                 organization                email
-//	 ---------   -----------------    ------------------------    ----------------------------
-//	  MAH           Mark A. Hallen	  Duke University               mah43@duke.edu
-///////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ *
+ * @author mhall44
+ */
 
 //This is a base class for the various DEE classes.  It contains shared functionality for different DEE methods
 public abstract class DEE {
@@ -78,15 +34,15 @@ public abstract class DEE {
 	//entries with this particular value will not be examined, as they are not allowed;
 	//note that when computing E intervals, if a steric is not allowed, (maxE-minE)=0,
 	//		so no comparison with stericE is necessary there
-	protected float bigE = (float)Math.pow(10,38);
+	protected double bigE = (double)Math.pow(10,38);
 
 	//steric energy that determines incompatibility of a rotamer with the template
-	float stericE = bigE;
+	double stericE = bigE;
 
-	protected float curEw = 0.0f;	//the max allowable difference from the GMEC (checkSum<=curEw should not be pruned)
+	protected double curEw = 0.0f;	//the max allowable difference from the GMEC (checkSum<=curEw should not be pruned)
 
 	//the minimum difference in the checkSum when a rotamer cannot be pruned
-	protected double minDiff = -(float)Math.pow(10,30);
+	protected double minDiff = -(double)Math.pow(10,30);
 
 	//boolean for turning on type dependent DEE i.e. only rotamers of the same type can prune each other
 	boolean typeDependent = false;
@@ -115,11 +71,11 @@ public abstract class DEE {
 
 	
 	//the template interval energy (0.0 if fixed backbone)
-	float templateInt = 0.0f;
+	double templateInt = 0.0f;
 
 	// 2010: iMinDEE
 	boolean doIMinDEE = false;
-	float Ival = 0.0f;
+	double Ival = 0.0f;
 
 
         protected int numMutable;
@@ -152,10 +108,10 @@ public abstract class DEE {
 
         //The constructors for the different classes are very similar, so calling this init function avoids redundancy
         public void init(PairwiseEnergyMatrix arpMatrix, PairwiseEnergyMatrix arpMatrixMax, int numResMutable,
-			int strMut[][], float initEw,
+			int strMut[][], double initEw,
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean doMin, double indInt[],
 			double pairInt[], boolean spFlags[][][][][][], boolean useSF, boolean minBB,
-                        int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean iMinDEE, float Ival,
+                        int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean iMinDEE, double Ival,
 			boolean mb, boolean dDEE, boolean residueMut[], boolean tripFlags[][][][][][][][][], boolean doPerts) {
 
 

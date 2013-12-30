@@ -82,10 +82,10 @@ public class DEESplit2f extends DEE {
 		
 	//constructor
 	DEESplit2f(PairwiseEnergyMatrix arpMatrix, PairwiseEnergyMatrix arpMatrixMax, int numResMutable,
-			int strMut[][], float initEw, 
+			int strMut[][], double initEw, 
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean residueMut[], 
 			boolean doMin, double indInt[], double pairInt[], boolean spFlags[][][][][][], boolean useSF, boolean dDEE, boolean minBB, 
-			int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE, float aIval, boolean doPerts) {
+			int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE, double aIval, boolean doPerts) {
 
                 init(arpMatrix, arpMatrixMax, numResMutable,
 			strMut, initEw, strandLRot, prunedRotAtRes, doMin, indInt, pairInt,

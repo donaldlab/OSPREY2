@@ -59,6 +59,7 @@
 * 
 */
 
+import cern.colt.matrix.DoubleMatrix1D;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -84,7 +85,16 @@ public class QueueNode implements Comparable {
 	//a pointer to the previous and next nodes in the expansion list
 	public QueueNode prevNode;
 	public QueueNode nextNode;
-	
+
+        boolean FSTermIncluded;//There is a fit-series terms included in the fScore
+        DoubleMatrix1D optFSPoint = null;//the values of the DOFs where the FS term is optimized
+        //if the FS term hasn't been computed for this node yet, it is inherited from the parent
+
+                
+        public QueueNode(){
+            
+        }
+
 	//constructor
 	QueueNode (int curNode, int curLevel, int curConf[], double fn) {
 
@@ -101,7 +111,45 @@ public class QueueNode implements Comparable {
 		prevNode = null;
 		nextNode = null;	
 	}
-	
+
+        
+        public static QueueNode makeSBS (int curNode, int curLevel, int curConf[], double fn ) {
+            //For split-by-slack: copies but includes all levels like makeNoCopy
+
+                QueueNode ans = new QueueNode();
+
+		ans.nodeNum = curNode;
+		ans.level = curLevel;
+                ans.confSoFar = curConf.clone();
+
+		ans.fScore = fn;
+
+		ans.prevNode = null;
+		ans.nextNode = null;
+
+                return ans;
+	}
+        
+        
+
+        public static QueueNode makeNoCopy (int curNode, int curLevel, int curConf[], double fn ) {
+            //make a QueueNode using curConf directly as confSoFar (allows flexibility in which levels are filled in)
+
+                QueueNode ans = new QueueNode();
+
+		ans.nodeNum = curNode;
+		ans.level = curLevel;
+                ans.confSoFar = curConf;
+
+		ans.fScore = fn;
+
+		ans.prevNode = null;
+		ans.nextNode = null;
+
+                return ans;
+	}
+        
+
 	public int compareTo(Object otherObject) throws ClassCastException{
         if(!(otherObject instanceof QueueNode)){
                 throw new ClassCastException("A QueueNode object expected.");

@@ -214,7 +214,7 @@ public class VolModule
 	//  selected as either type 1 or 2
 	// This is done in a manner very similar to generateSpace
 	// A defulat high resolution is used
-	public float getMoleculeVolume(){
+	public double getMoleculeVolume(){
 		return(getMoleculeVolume(0.25f,0.0f));
 	}
 
@@ -223,7 +223,7 @@ public class VolModule
 	// This is done in a manner very similar to generateSpace
 	// The grid spacing is volRes
 	// theSolvRadius is the solvent radius to use for this run
-	public float getMoleculeVolume(float volRes, float theSolvRadius){
+	public double getMoleculeVolume(double volRes, double theSolvRadius){
 
 		double bb[];
 		int xpos,ypos,zpos;
@@ -292,7 +292,7 @@ public class VolModule
 		//  the bounding region
 		double possibleVolume = (bb[1]-bb[0]) * (bb[3]-bb[2]) * (bb[5]-bb[4]);
 		double possiblePoints = possibleVolume / (volRes * volRes * volRes);
-		return((float)(numPoints / possiblePoints * possibleVolume));
+		return((double)(numPoints / possiblePoints * possibleVolume));
 	}
 
 
@@ -302,7 +302,7 @@ public class VolModule
 
 		double bbox[] = new double[6];
 		double axd,ayd,azd;
-		float coords[] = new float[3];
+		double coords[] = new double[3];
 		int tmpNum = 0;
 
 		bbox[0]=999999.0;		// xmin
@@ -377,10 +377,10 @@ public class VolModule
 	// *************************************************************
 	// Returns true if there is an atom too close to a specified new surface point
 	private boolean tooClose(double newsurfpt[], int neighborAt[], int numAtomsToCheck,
-		int moleculeAtomNumber, float threshMultiplier) {
+		int moleculeAtomNumber, double threshMultiplier) {
 
 		int atNum,tmpNum;
-		float atCoords[] = new float[3];
+		double atCoords[] = new double[3];
 		double thresh;
 		for(int i=0;i<numAtomsToCheck;i++) {
 			atNum = neighborAt[i];

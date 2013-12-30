@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	LoopClosureAdjustment.java
@@ -71,14 +71,12 @@ import java.util.ArrayList;
 
 public class LoopClosureAdjustment extends Perturbation {
 
-   // HashMap<float[],float[][][][]> confMap;
-    //Key: Perturbation parameters for the predecessors.  Value: Rotation matrices to use;
     
 
-    float predParams[][] = new float[0][];//Perturbation parameters for predecessors.
+    double predParams[][] = new double[0][];//Perturbation parameters for predecessors.
     //Indices: 1. Which set of predecessor parameters this is (state index) 2. Which perturbation
 
-    float[][][][][] rotMatrices = new float[0][][][][];//Rotation matrices
+    double[][][][][] rotMatrices = new double[0][][][][];//Rotation matrices
     //indices: 1. State index (like predParams) 2. # of solution 3. number of matrix
     //(0 for the middle sidechain & CA & everything before it; 1 for everything after) 4-5. Matrix indices
 
@@ -89,32 +87,39 @@ public class LoopClosureAdjustment extends Perturbation {
     //Possibly also add the option of some out-of-plane motion before and/or after?
     //(Added the same way)
 
+    TripeptideClosure tc;//This object stores the bond lengths & angles and omega dihedrals
+    //and will be used to compute the alternate conformations
+
 //Partial structure switch: here or separate?  Not sure
 
     public LoopClosureAdjustment(String t, Molecule molec, int resList[]){
 
         type=t;
         m=molec;
-        resAffected=resList;
+        resDirectlyAffected=resList;
 
         if(type.equalsIgnoreCase("SSNE"))//Secondary structure N-terminal expansion
             addSSEnd = true;
         else if(type.equalsIgnoreCase("SSCE"))//Secondary structure C-terminal expansion
             addSSStart = true;
 
+        explicitUnperturbed = !(addSSStart||addSSEnd);
+
+        tc = new TripeptideClosure(m, getTripepRes());
+        //This grabs the bond lengths, angles, and omega dihedrals before we start changing them
     }
 
     public void setDefaultParams(){//There can be up to 16 solutions so we create that many states
         //They're all discrete though
-        minParams = new float[16];
-        maxParams = new float[16];
+        minParams = new double[16];
+        maxParams = new double[16];
         for(int a=0;a<16;a++)
             minParams[a] = maxParams[a] = a;
     }
 
 
 
-    public boolean doPerturbationMotion(float param){
+    public boolean doPerturbationMotion(double param){
 
         int predState = -1;//If the predecessors have been in this state before this will indicate which set of known parameters this is
 
@@ -137,21 +142,25 @@ public class LoopClosureAdjustment extends Perturbation {
         }
 
 
-        if( (param < 0) || param >= ( rotMatrices[predState].length) )
-            return false;//The parameter value is invalid for this state of the predecessors
-        //So we fail to apply the perturbation
+        if( (param < 0) || param >= ( rotMatrices[predState].length) ){
+            invalidState = true;//The parameter value is invalid for this state of the predecessors
+            m.validBB = false;//So flag the molecule to have a bad backbone
+            return false;//So we fail to apply the perturbation
+        }
 
         applySSChanges();
-        
-        float[][][] rm = rotMatrices[predState][(int)param];
+
+        double[][][] rm = rotMatrices[predState][(int)param];
 
         if(addSSStart){
-            int tripepRes[] = {resAffected[1], resAffected[2], resAffected[3]};
+            int tripepRes[] = {resDirectlyAffected[1], resDirectlyAffected[2], resDirectlyAffected[3]};
             applyTripeptideRot(rm, tripepRes);
         }
         else
-            applyTripeptideRot(rm, resAffected);
+            applyTripeptideRot(rm, resDirectlyAffected);
 
+        invalidState = false;
+        m.updateValidBB();//See if we can lift the bad BB flag
         return true;
     }
 
@@ -159,7 +168,7 @@ public class LoopClosureAdjustment extends Perturbation {
 
 
 
-    public void applyTripeptideRot(float rm[][][], int res[]){
+    public void applyTripeptideRot(double rm[][][], int res[]){
         //Perform the loop closure adjustment rotations on three consecutive residues,
         //given the rotation matrices and the molecule residue numbers
 
@@ -188,63 +197,78 @@ public class LoopClosureAdjustment extends Perturbation {
 
 
 
+    public int[] getTripepRes(){
+        //Identify the residues in the tripeptide to be closed
+        if(addSSStart || addSSEnd){
+            int[] tripepRes = new int[3];
+
+            if(addSSStart)
+                System.arraycopy(resDirectlyAffected, 1, tripepRes, 0, 3);
+            else
+                System.arraycopy(resDirectlyAffected, 0, tripepRes, 0, 3);
+
+            return tripepRes;
+        }
+        else
+            return resDirectlyAffected;
+    }
 
 
 
     public int calcSolns(){//Solve the loop closure equations given the current state of predecessor perturbations
         //Store conformational change info and return the number of solutions
 
+        int tripepRes[] = getTripepRes();//Residues in the tripeptide to be closed
+
+
+
         //Get necessary lengths, angles, dihedrals
 
+        //MAYBE TEMPORARY CODE!!!
+        //DON'T CHANGE TC IF GOT FREESC PERTURBED STATE UNDER IT
+        boolean updateTC = true;
+
+
+        if(updateTC)
+            tc = new TripeptideClosure(m, getTripepRes());
+
+
         RotMatrix rm = new RotMatrix();
-        float[][][][] matrices = null;
+        double[][][][] matrices = null;
 
 
         double[] genChi1 = null;
-        int tripepRes[] = null;//Residues in the tripeptide to be closed
 
         //Backup coordinates for any residues to be moved (for secondary-structure adjustment purposes)
         //Would need to do the other same for other motions outside the closed tripeptide
         //We use oldCoords, like in undo; since we have not applied the perturbation yet this does not interfere with undoing
         if(addSSStart || addSSEnd){
-            oldCoords = new ArrayList<HashMap<String, float[]>>(resAffected.length);
+            oldCoords = new ArrayList<HashMap<String, double[]>>(resDirectlyAffected.length);
             genChi1 = getGenChi1();//Note the generalized chi1 for each residue so we can restore it after the changes
 
-            for(int a=0;a<resAffected.length;a++)
-                oldCoords.add(a, storeResBB(m.residue[resAffected[a]]) );
-
-            tripepRes = new int[3];
-
-            if(addSSStart)
-                System.arraycopy(resAffected, 1, tripepRes, 0, 3);
-            else
-                System.arraycopy(resAffected, 0, tripepRes, 0, 3);
+            for(int a=0;a<resDirectlyAffected.length;a++)
+                oldCoords.add(a, storeResBB(m.residue[resDirectlyAffected[a]]) );
         }
-        else
-            tripepRes = resAffected;
-
-
-        TripeptideClosure tc = new TripeptideClosure(m, tripepRes);
-        //This grabs the bond lengths, angles, and omega dihedrals before we start changing them
 
         applySSChanges();
+
         
 
-        float r_soln_n[][][] = new float[16][3][3];
-        float r_soln_a[][][] = new float[16][3][3];
-        float r_soln_c[][][] = new float[16][3][3];
+        double r_soln_n[][][] = new double[16][3][3];
+        double r_soln_a[][][] = new double[16][3][3];
+        double r_soln_c[][][] = new double[16][3][3];
 
-        float firstN[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("N") );//Coordinates of the first residue's N
-        float firstCA[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("CA") );//Its CA
-        float firstC[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("C") );
+        double firstN[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("N") );//Coordinates of the first residue's N
+        double firstCA[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("CA") );//Its CA
+        double firstC[] = m.getActualCoord( m.residue[ tripepRes[0] ].getAtomNameToMolnum("C") );
 
-        float midN[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("N") );//Starting coordinates of the middle N
-        float midCA[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("CA") );
-        float midC[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("C") );
+        double midN[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("N") );//Starting coordinates of the middle N
+        double midCA[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("CA") );
+        double midC[] = m.getActualCoord( m.residue[ tripepRes[1] ].getAtomNameToMolnum("C") );
 
-        float lastN[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("N") );
-        float lastCA[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("CA") );
-        float lastC[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("C") );
+        double lastN[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("N") );
+        double lastCA[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("CA") );
+        double lastC[] = m.getActualCoord( m.residue[ tripepRes[2] ].getAtomNameToMolnum("C") );
 
 
         int numSoln = tc.solve_3pep_poly( firstN, firstCA, lastCA, lastC, r_soln_n, r_soln_a, r_soln_c);
@@ -255,10 +279,10 @@ public class LoopClosureAdjustment extends Perturbation {
             shift = 1;
         //This is to make room for the unperturbed state at matrices[0]
 
-        matrices = new float[numSoln+shift][2][][];
+        matrices = new double[numSoln+shift][2][][];
 
         int unperturbed = -1;//The unperturbed state: will be found by least-squares comparison to the original state
-        float lowestSum = Float.POSITIVE_INFINITY;
+        double lowestSum = Double.POSITIVE_INFINITY;
 
         
         for(int s=0; s<numSoln; s++){
@@ -273,7 +297,7 @@ public class LoopClosureAdjustment extends Perturbation {
 
 
             if( ! (addSSStart || addSSEnd) ){//See if this might be the unperturbed state
-                float checkSum = rm.normsq( rm.subtract(firstC, r_soln_c[s][0]) )
+                double checkSum = rm.normsq( rm.subtract(firstC, r_soln_c[s][0]) )
                         + rm.normsq( rm.subtract(midN, r_soln_n[s][1]) )
                         + rm.normsq( rm.subtract(midCA, r_soln_a[s][1]) )
                         + rm.normsq( rm.subtract(midC, r_soln_c[s][1]) )
@@ -288,33 +312,45 @@ public class LoopClosureAdjustment extends Perturbation {
         }
 
         if(addSSStart || addSSEnd){//This is like undo.  In this case we do not expect the unperturbed state to have been generated
-            for(int a=0;a<resAffected.length;a++)
-                restoreResBB( m.residue[resAffected[a]], oldCoords.get(a) );
+            for(int a=0;a<resDirectlyAffected.length;a++)
+                restoreResBB( m.residue[resDirectlyAffected[a]], oldCoords.get(a) );
 
             setGenChi1(genChi1);
         }
         else{
 
-            if(numSoln == 0){//At least the unperturbed state should have been generated
-                System.err.println("Error applying tripeptide closure to residues " + resAffected[0] + " through " + resAffected[2]);
+            /*if(numSoln == 0){//At least the unperturbed state should have been generated
+                System.err.println("Error applying tripeptide closure to residues " + resDirectlyAffected[0] + " through " + resDirectlyAffected[2]);
                 System.exit(1);
             }
 
             //The unperturbed state needs to have parameter 0, so switch it to that position
             //We don't need matrices for the unperturbed state so those can be overwritten
             matrices[unperturbed] = matrices[0];
+             *
+             */
+
+            //With peptide translations/rotations preceding this LCA there might be cases where there is no unperturbed state...
+            //this will simply lead to invalidState being set true as long as the predecessors are leading to this
+            if(numSoln > 0){//Switch the unperturbed state into parameter 0
+                double unpertMatrices[][][] = matrices[unperturbed];
+                matrices[unperturbed] = matrices[0];
+                matrices[0] = unpertMatrices;//We keep matrices for the unperturbed state since we might need them to close the BB chain
+            }
+
+
         }
 
 
         //Store the matrices and current perturbation parameters at the end of rotMatrices and predParams respectively
-        float newPredParams[][] = new float[predParams.length+1][];
-        float newRotMatrices[][][][][] = new float[rotMatrices.length+1][][][][];
+        double newPredParams[][] = new double[predParams.length+1][];
+        double newRotMatrices[][][][][] = new double[rotMatrices.length+1][][][][];
         System.arraycopy(predParams,0,newPredParams,0,predParams.length);
         System.arraycopy(rotMatrices,0,newRotMatrices,0,rotMatrices.length);
         predParams = newPredParams;
         rotMatrices = newRotMatrices;
 
-        predParams[predParams.length-1] = new float[predecessors.length];
+        predParams[predParams.length-1] = new double[predecessors.length];
         for(int b=0;b<predecessors.length;b++)
             predParams[predParams.length-1][b] = m.perts[predecessors[b]].curParam;
 
@@ -337,29 +373,29 @@ public class LoopClosureAdjustment extends Perturbation {
 
         int closeStart=0;//Start of tripeptide to close
 
-        float anchor1Old[] = null, anchor2Old[] = null;//Positions of anchor CAs before SS changes
+        double anchor1Old[] = null, anchor2Old[] = null;//Positions of anchor CAs before SS changes
 
         if(addSSStart){//Add the first residue
 
-            Residue res0 = m.residue[resAffected[0]];
-            if(!m.checkNBonded(resAffected[0])){
+            Residue res0 = m.residue[resDirectlyAffected[0]];
+            if(!m.checkNBonded(resDirectlyAffected[0])){
                 System.err.println("ERROR: Trying to add " + res0.fullName +
                         " to a preceding secondary structure, but it is not bonded to any preceding residue");
                 System.exit(1);
             }
 
-            Residue res1 = m.residue[resAffected[1]];
+            Residue res1 = m.residue[resDirectlyAffected[1]];
 
             anchor1Old = m.getActualCoord( res1.getAtomNameToMolnum("CA") );
 
-            float phiPsi[] = rcheck.getPhiPsi(m, resAffected[0]-1);//phi, psi for residue before perturbation starts
+            double phiPsi[] = rcheck.getPhiPsi(m, resDirectlyAffected[0]-1);//phi, psi for residue before perturbation starts
 
             //First set phi
             int atomList1[] = res0.getAtomList(false, true, true, true);
             int atomList2[] = res1.getAtomList(true, true, true, false);
             int[] atomList = concatenateArrays(atomList1, atomList2);
 
-            m.setTorsion( m.residue[resAffected[0]-1].getAtomNameToMolnum("C") ,
+            m.setTorsion( m.residue[resDirectlyAffected[0]-1].getAtomNameToMolnum("C") ,
                     res0.getAtomNameToMolnum("N"), res0.getAtomNameToMolnum("CA"),
                     res0.getAtomNameToMolnum("C"), phiPsi[0], atomList, atomList.length, false);
             
@@ -378,18 +414,18 @@ public class LoopClosureAdjustment extends Perturbation {
 
         if(addSSEnd){
             
-            Residue resEnd = m.residue[resAffected[resAffected.length-1]];
-            if(!m.checkCBonded(resAffected[resAffected.length-1])){
+            Residue resEnd = m.residue[resDirectlyAffected[resDirectlyAffected.length-1]];
+            if(!m.checkCBonded(resDirectlyAffected[resDirectlyAffected.length-1])){
                 System.err.println("ERROR: Trying to add " + resEnd.fullName +
                         " to an ensuing secondary structure, but it is not bonded to any ensuing residue");
                 System.exit(1);
             }
 
-            Residue resPrior = m.residue[resAffected[resAffected.length-2]];
+            Residue resPrior = m.residue[resDirectlyAffected[resDirectlyAffected.length-2]];
 
             anchor2Old = m.getActualCoord( resPrior.getAtomNameToMolnum("CA") );
 
-            float phiPsi[] = rcheck.getPhiPsi(m, resAffected[resAffected.length-1]+1 );
+            double phiPsi[] = rcheck.getPhiPsi(m, resDirectlyAffected[resDirectlyAffected.length-1]+1 );
             //phi, psi for residue after perturbation ends
 
             //First set psi
@@ -397,7 +433,7 @@ public class LoopClosureAdjustment extends Perturbation {
             int atomList2[] = resPrior.getAtomList(false, true, true, true);
             int[] atomList = concatenateArrays(atomList1, atomList2);
 
-            m.setTorsion( m.residue[resAffected[resAffected.length-1]+1].getAtomNameToMolnum("N") ,
+            m.setTorsion( m.residue[resDirectlyAffected[resDirectlyAffected.length-1]+1].getAtomNameToMolnum("N") ,
                     resEnd.getAtomNameToMolnum("C"), resEnd.getAtomNameToMolnum("CA"),
                     resEnd.getAtomNameToMolnum("N"), phiPsi[1], atomList, atomList.length, false);
 
@@ -412,15 +448,15 @@ public class LoopClosureAdjustment extends Perturbation {
                     phiPsi[0], atomList, atomList.length, false);
         }
         else
-            anchor2Old = m.getActualCoord( m.residue[resAffected.length-1].getAtomNameToMolnum("CA") );
+            anchor2Old = m.getActualCoord( m.residue[resDirectlyAffected.length-1].getAtomNameToMolnum("CA") );
 
 
-        Residue anchorRes1 = m.residue[resAffected[closeStart]];
-        Residue middleRes = m.residue[resAffected[closeStart+1]];
-        Residue anchorRes2 = m.residue[resAffected[closeStart+2]];
+        Residue anchorRes1 = m.residue[resDirectlyAffected[closeStart]];
+        Residue middleRes = m.residue[resDirectlyAffected[closeStart+1]];
+        Residue anchorRes2 = m.residue[resDirectlyAffected[closeStart+2]];
 
-        float anchor1New[] = m.getActualCoord( anchorRes1.getAtomNameToMolnum("CA") );
-        float anchor2New[] = m.getActualCoord( anchorRes2.getAtomNameToMolnum("CA") );
+        double anchor1New[] = m.getActualCoord( anchorRes1.getAtomNameToMolnum("CA") );
+        double anchor2New[] = m.getActualCoord( anchorRes2.getAtomNameToMolnum("CA") );
 
 
 
@@ -435,7 +471,7 @@ public class LoopClosureAdjustment extends Perturbation {
             int atomList[] = concatenateArrays( anchorRes1.getAtomList(false, false, false, true),
                 middleRes.getAtomList(true, true, true, false) );
 
-            float tr[] = rm.subtract(anchor1New, anchor1Old);
+            double tr[] = rm.subtract(anchor1New, anchor1Old);
             m.translateAtomList(atomList, tr, false, false);
         }
 
@@ -443,7 +479,7 @@ public class LoopClosureAdjustment extends Perturbation {
             int atomList[] = concatenateArrays( middleRes.getAtomList(false, false, false, true),
                 anchorRes2.getAtomList(true, false, false, false) );
 
-            float tr[] = rm.subtract(anchor2New, anchor2Old);
+            double tr[] = rm.subtract(anchor2New, anchor2Old);
             m.translateAtomList(atomList, tr, false, false);
         }
         
@@ -474,6 +510,11 @@ public class LoopClosureAdjustment extends Perturbation {
     }
 
 
+    
+    @Override
+    public boolean isParamAngle(){
+        return false;
+    }
 
 
 

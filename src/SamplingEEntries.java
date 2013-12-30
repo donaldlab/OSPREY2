@@ -62,6 +62,6 @@ import java.io.Serializable;
  */
 public class SamplingEEntries implements Serializable {
 	public int i1, i2, i3, i4, i5, i6;
-	public float minE, maxE;
+	public double minE, maxE;
 	SamplingEEntries(){};
 }

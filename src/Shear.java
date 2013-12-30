@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	Shear.java
@@ -68,14 +68,14 @@ public class Shear extends Perturbation {
 
 
 
-    static float defaultMaxParams[] = {2.5f};
-    static float defaultMinParams[] = {-2.5f};
+    static double defaultMaxParams[] = {2.5f};
+    static double defaultMinParams[] = {-2.5f};
 
     public Shear(Molecule molec,int resList[]){
 
         type="Shear";
         m=molec;
-        resAffected=resList;
+        resDirectlyAffected=resList;
     }
 
 
@@ -87,19 +87,19 @@ public class Shear extends Perturbation {
 
 
 
-    public boolean doPerturbationMotion(float param){//Apply the perturbation
+    public boolean doPerturbationMotion(double param){//Apply the perturbation
         //Use an arbitrary param (primary shear angle in degrees)
 
-        float rm[][][]=new float[3][3][3];//single-use rotation matrices
-        float tr[][]=new float[2][3];//single-use translation vectors
+        double rm[][][]=new double[3][3][3];//single-use rotation matrices
+        double tr[][]=new double[2][3];//single-use translation vectors
 
 
         Calphas=new Atom[4];
         for(int a=0;a<4;a++){
-            Calphas[a]=m.residue[resAffected[a]].getAtomByName("CA");
+            Calphas[a]=m.residue[resDirectlyAffected[a]].getAtomByName("CA");
         }
 
-        Residue theRes=m.residue[resAffected[1]];
+        Residue theRes=m.residue[resDirectlyAffected[1]];
         midC = theRes.getAtomByName("C");
         midO = theRes.getAtomByName("O");
 
@@ -113,56 +113,56 @@ public class Shear extends Perturbation {
 
 
 
-    public void calcTransRot(float param, float rm[][][], float tr[][]){//calculate rotation matrices and translation vectors for a given perturbation parameter, put them in rm and tr
+    public void calcTransRot(double param, double rm[][][], double tr[][]){//calculate rotation matrices and translation vectors for a given perturbation parameter, put them in rm and tr
 //rm and tr should be 3X3X3 and 2X3 arrays respectively
 
-        float x[][]=new float[4][3];//Calpha coordinates
+        double x[][]=new double[4][3];//Calpha coordinates
         for(int a=0;a<4;a++){
             int CAAtNum = Calphas[a].moleculeAtomNumber;
             for(int b=0;b<3;b++)
                 x[a][b]=m.actualCoordinates[3*CAAtNum + b];
         }
 
-        float w[] = new float[3];
+        double w[] = new double[3];
         for(int a=0;a<3;a++)
             w[a] = m.actualCoordinates[3*midO.moleculeAtomNumber + a] - m.actualCoordinates[3*midC.moleculeAtomNumber + a];
 
 
         RotMatrix r=new RotMatrix();//This is actually an object for performing rot. matrix-related calculations
-        float x01[]=r.subtract(x[1],x[0]);//vector from 1st to second Calpha
-        float x12[]=r.subtract(x[2],x[1]);
-        float x23[]=r.subtract(x[3],x[2]);
+        double x01[]=r.subtract(x[1],x[0]);//vector from 1st to second Calpha
+        double x12[]=r.subtract(x[2],x[1]);
+        double x23[]=r.subtract(x[3],x[2]);
 
-        float rotax1[]=r.cross(x01,x12);//First peptide and sidechain
+        double rotax1[]=r.cross(x01,x12);//First peptide and sidechain
         r.getRotMatrix(rotax1[0],rotax1[1],rotax1[2],param,rm[0]);//Note getRotMatrix takes angles in degrees
 
         tr[0]=r.subtract(r.applyRotMatrix(rm[0],x01),x01);
 
-        float y1[]=r.add(x[1],tr[0]);//Last peptide and sidechain 2.  y1=new 2nd CA coordinates
-        float y13[]=r.subtract(x[3],y1);
-        float a=r.norm(x23);
-        float b=r.norm(y13);
-        float d=r.norm(x12);
-        float beta=(float)(Math.acos(r.dot(x23,y13)/(a*b)) - Math.acos((b*b+a*a-d*d)/(2*a*b)));//Second rotation angle
-        float rotax2[]=r.cross(x23,y13);
+        double y1[]=r.add(x[1],tr[0]);//Last peptide and sidechain 2.  y1=new 2nd CA coordinates
+        double y13[]=r.subtract(x[3],y1);
+        double a=r.norm(x23);
+        double b=r.norm(y13);
+        double d=r.norm(x12);
+        double beta=(double)(Math.acos(r.dot(x23,y13)/(a*b)) - Math.acos((b*b+a*a-d*d)/(2*a*b)));//Second rotation angle
+        double rotax2[]=r.cross(x23,y13);
         r.getRotMatrixRad(rotax2[0],rotax2[1],rotax2[2],beta,rm[2]);//beta is in radians
         tr[1]=r.subtract(x23,r.applyRotMatrix(rm[2],x23));
 
 
-        float y2[]=r.add(x[2],tr[1]);//Calculating middle peptide rotation, rm[1].  y2=new 3rd CA coordinates
-        float y12[]=r.subtract(y2,y1);
-        float theta=r.getAngle(x12,y12);
-        float srotax[]=r.cross(x12,y12);//Rotation axis to superimpose
+        double y2[]=r.add(x[2],tr[1]);//Calculating middle peptide rotation, rm[1].  y2=new 3rd CA coordinates
+        double y12[]=r.subtract(y2,y1);
+        double theta=r.getAngle(x12,y12);
+        double srotax[]=r.cross(x12,y12);//Rotation axis to superimpose
 
         if( r.norm(srotax) == 0 )//This will happen if x12, y12 are the same.  No feasible shear will have x12 and y12 in opposite directions
             rm[1] = r.identity();
         else
             r.getRotMatrixRad(srotax[0],srotax[1],srotax[2],theta,rm[1]);//Rotate middle peptide to superimpose Calphas
-        float u[]=r.applyRotMatrix(rm[1],w);
+        double u[]=r.applyRotMatrix(rm[1],w);
         
-        float rmalpha[][]=new float[3][3];//Additional rotation to correct carbonyl orientation
-        float vhat[]=r.scale(y12,1/r.norm(y12));//unit vector along line from 2nd to 3rd Calpha
-        float alpha=(float)Math.atan2( r.dot(r.cross(u,w),vhat), r.dot(w,u)-r.dot(w,vhat)*r.dot(u,vhat));
+        double rmalpha[][]=new double[3][3];//Additional rotation to correct carbonyl orientation
+        double vhat[]=r.scale(y12,1/r.norm(y12));//unit vector along line from 2nd to 3rd Calpha
+        double alpha=(double)Math.atan2( r.dot(r.cross(u,w),vhat), r.dot(w,u)-r.dot(w,vhat)*r.dot(u,vhat));
         r.getRotMatrixRad(vhat[0],vhat[1],vhat[2],alpha,rmalpha);
 
         rm[1]=r.multiplyMatrices(rmalpha,rm[1]);
@@ -171,7 +171,7 @@ public class Shear extends Perturbation {
 
 
 
-    public void applyTransRot(float rm[][][], float tr[][]){
+    public void applyTransRot(double rm[][][], double tr[][]){
 
         //Movements are applied in reverse of the atom order in the peptide chain because the motion
         //of some atoms is based on the original position of CAs earlier in the chain
@@ -180,46 +180,53 @@ public class Shear extends Perturbation {
 
 
             int CA2AtNum = Calphas[2].moleculeAtomNumber;//Just rotate and translate the amide group
-            int amide[] = m.residue[resAffected[3]].getAtomList(true,false,false,false);
+            int amide[] = m.residue[resDirectlyAffected[3]].getAtomList(true,false,false,false);
             m.rotateAtomList( amide, rm[2], m.actualCoordinates[3*CA2AtNum],
                     m.actualCoordinates[3*CA2AtNum+1], m.actualCoordinates[3*CA2AtNum+2], false);
             m.translateAtomList( amide, tr[1], false, false);
 
 
-            int nonAmide[] = m.residue[resAffected[2]].getAtomList(false, true, true, true);
+            int nonAmide[] = m.residue[resDirectlyAffected[2]].getAtomList(false, true, true, true);
             m.rotateAtomList( nonAmide, rm[2], m.actualCoordinates[3*CA2AtNum],
                     m.actualCoordinates[3*CA2AtNum+1], m.actualCoordinates[3*CA2AtNum+2], false);
             m.translateAtomList( nonAmide, tr[1], false, false);
 
             int CA1AtNum = Calphas[1].moleculeAtomNumber;//Rotate and translate the amide group
-            amide =  m.residue[resAffected[2]].getAtomList(true,false,false,false);
+            amide =  m.residue[resDirectlyAffected[2]].getAtomList(true,false,false,false);
             m.rotateAtomList( amide, rm[1], m.actualCoordinates[3*CA1AtNum],
                     m.actualCoordinates[3*CA1AtNum+1], m.actualCoordinates[3*CA1AtNum+2], false);
             m.translateAtomList( amide, tr[0], false, false);
 
 
-            int carbonyl[] = m.residue[resAffected[1]].getAtomList(false,false,false,true);
+            int carbonyl[] = m.residue[resDirectlyAffected[1]].getAtomList(false,false,false,true);
             m.rotateAtomList( carbonyl, rm[1], m.actualCoordinates[3*CA1AtNum],
                     m.actualCoordinates[3*CA1AtNum+1], m.actualCoordinates[3*CA1AtNum+2], false);
             m.translateAtomList( carbonyl, tr[0], false, false);
 
             int CA0AtNum = Calphas[0].moleculeAtomNumber;//Rotate all the residue except the carbonyl group about the first anchor CA
-            int nonCarbonyl[] = m.residue[resAffected[1]].getAtomList(true,true,true,false);
+            int nonCarbonyl[] = m.residue[resDirectlyAffected[1]].getAtomList(true,true,true,false);
             m.rotateAtomList( nonCarbonyl, rm[0], m.actualCoordinates[3*CA0AtNum],
                     m.actualCoordinates[3*CA0AtNum+1], m.actualCoordinates[3*CA0AtNum+2], false);
 
         
 
-            m.rotateAtomList( m.residue[resAffected[0]].getAtomList(false, false, false, true), rm[0],
+            m.rotateAtomList( m.residue[resDirectlyAffected[0]].getAtomList(false, false, false, true), rm[0],
                     m.actualCoordinates[3*CA0AtNum], m.actualCoordinates[3*CA0AtNum+1],
                     m.actualCoordinates[3*CA0AtNum+2], false);
     }
 
 
 
-    public float getStepSizeForMinimizer(){//Return a step size for the minimizer to use when optimizing this perturbation
+    @Override
+    public double getStepSizeForMinimizer(){//Return a step size for the minimizer to use when optimizing this perturbation
         //This could potentially be improved
         return 0.5f;
+    }
+
+    
+    @Override
+    public double getMeshWidth(){
+        return 0.5;
     }
 
 
@@ -236,8 +243,8 @@ public class Shear extends Perturbation {
             }
 
 
-            float min1 = Float.valueOf(st.nextToken());
-            float max1 = Float.valueOf(st.nextToken());
+            double min1 = Double.valueOf(st.nextToken());
+            double max1 = Double.valueOf(st.nextToken());
 
             if( min1 + max1 != 0 ){//The first (unperturbed) state must be centered at 0
                 System.err.println("First shear state (unperturbed) must be centered at 0: using -2.5 to 2.5");
@@ -245,15 +252,15 @@ public class Shear extends Perturbation {
                 max1 = 2.5f;
             }
 
-            defaultMinParams = new float[numStates];
-            defaultMaxParams = new float[numStates];
+            defaultMinParams = new double[numStates];
+            defaultMaxParams = new double[numStates];
 
             defaultMinParams[0] = min1;
             defaultMaxParams[0] = max1;
 
             for(int state=1; state<numStates; state++){
-                defaultMinParams[state] = Float.valueOf(st.nextToken());
-                defaultMaxParams[state] = Float.valueOf(st.nextToken());
+                defaultMinParams[state] = Double.valueOf(st.nextToken());
+                defaultMaxParams[state] = Double.valueOf(st.nextToken());
             }
 
         }
@@ -266,5 +273,12 @@ public class Shear extends Perturbation {
         //Also +/- 3 degrees if there are no overlapping perturbations and no AA type in the shear has >10 rotamers
         
     }*/
+    
+    
+        
+    @Override
+    public boolean isParamAngle(){
+        return true;
+    }
 
 }

@@ -90,7 +90,7 @@ class PDBChemModel {
     ArrayList<Integer> sortedStarts, sortedEnds;//for use by sortSS: keeps track of secondary structures to sort
     ArrayList<Character> sortedStrands;
 
-    float overlapThresh = 0.4f;//Steric overlap threshold for auto-fixing residues
+    double overlapThresh = 0.4f;//Steric overlap threshold for auto-fixing residues
 
   // Reads a pdb file and creates a molecule object
 	PDBChemModel (Molecule m, InputStream is) throws Exception {
@@ -105,7 +105,7 @@ class PDBChemModel {
 		String tmpStg = null;
 		int tmpInt;
 		char[] tmpChr = new char[15];
-		float	x = 0f, y = 0f, z = 0f, B = 0f;
+		double	x = 0f, y = 0f, z = 0f, B = 0f;
 		Atom	newAtom;
 		boolean newStrandPending = true;  // Will add the first strand with the first atom
 		Residue newResidue = null;
@@ -178,15 +178,15 @@ class PDBChemModel {
 				 	newStrandPending = false;
 				}
 				tmpStg = curLine.substring(30,38);  // Snag x coord
-				x = (float) new Double(tmpStg).doubleValue();
+				x = (double) new Double(tmpStg).doubleValue();
 				tmpStg = curLine.substring(38,46);  // Snag y coord
-				y = (float) new Double(tmpStg).doubleValue();
+				y = (double) new Double(tmpStg).doubleValue();
 				tmpStg = curLine.substring(46,54);  // Snag z coord
-				z = (float) new Double(tmpStg).doubleValue();
+				z = (double) new Double(tmpStg).doubleValue();
 
                                 tmpStg = curLine.substring(60,66).trim();  // Snag B-factor
                                 if(!tmpStg.isEmpty())
-                                    B = (float) new Double(tmpStg).doubleValue();
+                                    B = (double) new Double(tmpStg).doubleValue();
 
 				elementType = curLine.substring(76,78);  // Snag atom elementType
 				elementType = elementType.trim();
@@ -593,7 +593,7 @@ class PDBChemModel {
                             ProbeStericCheck psc = new ProbeStericCheck();
                             RotMatrix r = new RotMatrix();
 
-                            HashMap<String, float[]> oldCoord = new HashMap<String, float[]>();//Record known coordinates
+                            HashMap<String, double[]> oldCoord = new HashMap<String, double[]>();//Record known coordinates
                             for( Atom at : res.atom )
                                 oldCoord.put(at.name, at.coord);
 
@@ -602,8 +602,8 @@ class PDBChemModel {
 
                             int numRot = EnvironmentVars.aaRotLib.getNumRotamers( res.name );
 
-                            float minMSDGood = Float.POSITIVE_INFINITY;//Lowest MSD of a sterically good rotamer to the template
-                            float minMSDBad = Float.POSITIVE_INFINITY;//Lowest MSD of a sterically bad rotamer to the template
+                            double minMSDGood = Double.POSITIVE_INFINITY;//Lowest MSD of a sterically good rotamer to the template
+                            double minMSDBad = Double.POSITIVE_INFINITY;//Lowest MSD of a sterically bad rotamer to the template
                             //(These are based on atoms of the same name in the residue and the template)
 
                             int argminMSDGood = -1;//The corresponding rotamer indices
@@ -616,7 +616,7 @@ class PDBChemModel {
                                 int firstMolAtNum = res.atom[0].moleculeAtomNumber;
                                 int lastMolAtNum = res.atom[res.atom.length-1].moleculeAtomNumber;
 
-                                float msd = 0;
+                                double msd = 0;
                                 boolean stericallyGood = true;
 
                                 for( Atom at : res.atom ){
@@ -624,7 +624,7 @@ class PDBChemModel {
                                     int molAtNum1 = at.moleculeAtomNumber;
 
                                     if( oldCoord.containsKey(at.name) ){
-                                        float dev = r.norm( r.subtract( m.getActualCoord(molAtNum1),
+                                        double dev = r.norm( r.subtract( m.getActualCoord(molAtNum1),
                                                 oldCoord.get(at.name) ) );
                                         msd += dev*dev;
                                     }

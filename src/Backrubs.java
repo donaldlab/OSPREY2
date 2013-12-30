@@ -67,7 +67,7 @@ import java.io.Serializable;
  */
 public class Backrubs implements Serializable {
 	
-	final float thetaSmallScale = 0.7f; //the scaling factor for the rotation angles for the small rotations
+	final double thetaSmallScale = 0.7f; //the scaling factor for the rotation angles for the small rotations
 	
 	//constructor
 	Backrubs(){
@@ -82,7 +82,7 @@ public class Backrubs implements Serializable {
 	//	The only atoms that move from their initial positions belong to residue resNum and the adjacent peptides
 	//	If computeSmallRot is true, then the values of theta2 and theta3 are computed after the first rotation, 
 	//		so that the H-bonding positions of CO and NH are roughly preserved
-	public float[] applyBackrub(Molecule m, int strandNum, int resNum, float theta1, boolean computeSmallRot, float theta2, float theta3){
+	public double[] applyBackrub(Molecule m, int strandNum, int resNum, double theta1, boolean computeSmallRot, double theta2, double theta3){
 		
 		if ( ((resNum==0)||(m.strand[strandNum].residue[resNum-1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()-1))
 				|| ((resNum==(m.strand[strandNum].numberOfResidues-1))||(m.strand[strandNum].residue[resNum+1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()+1)) ) {
@@ -133,9 +133,9 @@ public class Backrubs implements Serializable {
 		atomList3[2] = Nnext.moleculeAtomNumber;
 		atomList3[3] = Hnext.moleculeAtomNumber;
 		
-		float OprevOldCoord[] = getActualCoord(m, Oprev);
+		double OprevOldCoord[] = getActualCoord(m, Oprev);
 		Atom pseudoOprevOld = new Atom(Oprev.name,OprevOldCoord[0],OprevOldCoord[1],OprevOldCoord[2]);
-		float OcurOldCoord[] = getActualCoord(m, Ocur);
+		double OcurOldCoord[] = getActualCoord(m, Ocur);
 		Atom pseudoOcurOld = new Atom(Ocur.name,OcurOldCoord[0],OcurOldCoord[1],OcurOldCoord[2]);
 
 		//Perform the big rotation
@@ -159,7 +159,7 @@ public class Backrubs implements Serializable {
 		rotateList(m,atomList3,CAcur,CAnext,CAcur,theta3);
 		
 		if (computeSmallRot){
-			float theta23[] = new float[2];
+			double theta23[] = new double[2];
 			theta23[0] = theta2;
 			theta23[1] = theta3;
 			return theta23;
@@ -168,15 +168,15 @@ public class Backrubs implements Serializable {
 	}
 	
 	//Rotates all atoms in atomList[] around the axis between atoms a1-a2, centered at atom c, by theta degrees
-	private void rotateList(Molecule m, int atomList[], Atom a1, Atom a2, Atom c, float theta){
+	private void rotateList(Molecule m, int atomList[], Atom a1, Atom a2, Atom c, double theta){
 		
 		int a1num = a1.moleculeAtomNumber;
 		int a2num = a2.moleculeAtomNumber;
 		int cnum = c.moleculeAtomNumber;
 		
-		float dx = m.actualCoordinates[a2num*3] - m.actualCoordinates[a1num*3];
-		float dy = m.actualCoordinates[a2num*3+1] - m.actualCoordinates[a1num*3+1];
-		float dz = m.actualCoordinates[a2num*3+2] - m.actualCoordinates[a1num*3+2];
+		double dx = m.actualCoordinates[a2num*3] - m.actualCoordinates[a1num*3];
+		double dy = m.actualCoordinates[a2num*3+1] - m.actualCoordinates[a1num*3+1];
+		double dz = m.actualCoordinates[a2num*3+2] - m.actualCoordinates[a1num*3+2];
 		
 		double center[] = new double[3];
 		center[0] = m.actualCoordinates[cnum*3];
@@ -197,11 +197,11 @@ public class Backrubs implements Serializable {
 	}
 	
 	//Returns the coordinates in actualCoordinates[] for atom a from molecule m
-	private float [] getActualCoord(Molecule m, Atom a){
+	private double [] getActualCoord(Molecule m, Atom a){
 		
 		int anum = a.moleculeAtomNumber;
 		
-		float coord[] = new float[3];
+		double coord[] = new double[3];
 		for (int i=0; i<3; i++)
 			coord[i] = m.actualCoordinates[anum*3+i];
 		
@@ -209,16 +209,16 @@ public class Backrubs implements Serializable {
 	}
 	
 	//Get the small rotation angle that will rotate atom a1 around the axis defined by atoms (a2,a3), so that a1 will be as close as possible to atom a4
-	private float getSmallRotAngle(Molecule m, Atom a1, Atom a2, Atom a3, Atom a4){
+	private double getSmallRotAngle(Molecule m, Atom a1, Atom a2, Atom a3, Atom a4){
 		
-		float a1Coord[] = getActualCoord(m, a1);
+		double a1Coord[] = getActualCoord(m, a1);
 		Atom pp1 = new Atom(a1.name,a1Coord[0],a1Coord[1],a1Coord[2]);
-		float a2Coord[] = getActualCoord(m,a2);
+		double a2Coord[] = getActualCoord(m,a2);
 		Atom pp2 = new Atom(a2.name,a2Coord[0],a2Coord[1],a2Coord[2]);
 		Atom pp3 = projectPointLine(a3, pp2, pp1);
 		Atom pp4 = projectPointPlane(a3, pp2, pp3, a4);
 		Atom closestPoint = getClosestPoint(pp3,pp1,pp4);
-		return (float)closestPoint.angle(pp1, pp3);
+		return (double)closestPoint.angle(pp1, pp3);
 	}
 
 
@@ -228,14 +228,14 @@ public class Backrubs implements Serializable {
 	//Returns the projection (a pseudo-atom) of atom p3 onto the line between atoms l1 and l2
 	public Atom projectPointLine(Atom l1, Atom l2, Atom p3){
 		
-		float c[] = new float[3];
+		double c[] = new double[3];
 		double d12sq = Math.pow(l2.distance(l1),2);
 		double u = ( (p3.coord[0]-l1.coord[0])*(l2.coord[0]-l1.coord[0]) + (p3.coord[1]-l1.coord[1])*(l2.coord[1]-l1.coord[1]) + (p3.coord[2]-l1.coord[2])*(l2.coord[2]-l1.coord[2]) );
 		u = u / d12sq;
 		
-		c[0] = (float)(l1.coord[0] + u * (l2.coord[0]-l1.coord[0]));
-		c[1] = (float)(l1.coord[1] + u * (l2.coord[1]-l1.coord[1]));
-		c[2] = (float)(l1.coord[2] + u * (l2.coord[2]-l1.coord[2]));
+		c[0] = (double)(l1.coord[0] + u * (l2.coord[0]-l1.coord[0]));
+		c[1] = (double)(l1.coord[1] + u * (l2.coord[1]-l1.coord[1]));
+		c[2] = (double)(l1.coord[2] + u * (l2.coord[2]-l1.coord[2]));
 		
 		return (new Atom("",c[0],c[1],c[2]));
 	}
@@ -243,26 +243,26 @@ public class Backrubs implements Serializable {
 	//Returns the projection (a pseudo-atom) of atom p4 onto the plane with normal defined by atoms (l1,l2) and a point on that plane c3
 	public Atom projectPointPlane(Atom l1, Atom l2, Atom c3, Atom p4){
 		
-		float l[] = new float[3];
+		double l[] = new double[3];
 		for (int i=0; i<3; i++)
 			l[i] = l2.coord[i] - l1.coord[i];
 		
-		float d = 0.0f;
+		double d = 0.0f;
 		for (int i=0; i<3; i++)
 			d += l[i]*c3.coord[i];
 		
-		float t1 = 0.0f;
+		double t1 = 0.0f;
 		for (int i=0; i<3; i++)
 			t1 += l[i]*p4.coord[i];
 		t1 -= d;
 		
-		float t2 = 0.0f;
+		double t2 = 0.0f;
 		for (int i=0; i<3; i++)
 			t2 += l[i]*l[i];
 		
-		float t = t1/t2;
+		double t = t1/t2;
 		
-		float r[] = new float[3];
+		double r[] = new double[3];
 		for (int i=0; i<3; i++)
 			r[i] = p4.coord[i] - t*l[i];
 		
@@ -272,18 +272,18 @@ public class Backrubs implements Serializable {
 	//Compute the closest point on the circle defined by the Atom c (center) and radius (c,p1) to Atom q1 (this assumes c, p1, and q1 are coplanar)
 	public Atom getClosestPoint (Atom c, Atom p1, Atom q1){
 		
-		float r = (float)c.distance(p1);
+		double r = (double)c.distance(p1);
 		
-		float t[] = new float[3];
+		double t[] = new double[3];
 		for (int i=0; i<3; i++)
 			t[i] = q1.coord[i] - c.coord[i];
 		
-		float d = 0.0f;
+		double d = 0.0f;
 		for (int i=0; i<3; i++)
 			d += t[i]*t[i];
-		d = (float)Math.sqrt(d);
+		d = (double)Math.sqrt(d);
 		
-		float a[] = new float[3];
+		double a[] = new double[3];
 		for (int i=0; i<3; i++)
 			a[i] = c.coord[i] + r*(t[i]/d);
 		

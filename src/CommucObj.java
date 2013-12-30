@@ -80,9 +80,9 @@ public class CommucObj implements Serializable
 		String AA[] = null;
 		int AAnums[] = null;
 		int rot[] = null;
-		float minBound = 0.0f;
-		float unMinE = 0.0f;
-		float minE = 0.0f;
+		double minBound = 0.0f;
+		double unMinE = 0.0f;
+		double minE = 0.0f;
 		
 		ConfInfo (int treeLevels){
 			rot = new int[treeLevels];
@@ -104,14 +104,14 @@ public class CommucObj implements Serializable
 	int EL_searchNumConfsEvaluated = 0;
 	int EL_searchNumConfsLeft = 0;
 	int EL_searchNumPrunedMinDEE = 0;
-	float EL_searchBestEnergyFound = 99999.0f;*/
+	double EL_searchBestEnergyFound = 99999.0f;*/
 	int searchNumConfsTotal[] = null;
 	int searchNumConfsPrunedByE[] = null;
 	int searchNumConfsPrunedByS[] = null;
 	int searchNumConfsEvaluated[] = null;
 	int searchNumConfsLeft[] = null;
 	int searchNumPrunedMinDEE[] = null;
-	float searchBestEnergyFound[] = null;
+	double searchBestEnergyFound[] = null;
 	BigDecimal q[] = null;
 	/*BigDecimal q_E = new BigDecimal(0.0);
 	BigDecimal q_EL = new BigDecimal(0.0);
@@ -147,8 +147,8 @@ boolean typeDep = false;
 	String AAallowed[][] = null;
 	boolean resMutatable[] = null;
 	String minDEEfile = null;
-	float initEw = 0.0f;
-	float pruningE = (float)Math.pow(10,38);
+	double initEw = 0.0f;
+	double pruningE = (double)Math.pow(10,38);
 	boolean repeatEW[] = null;
 	boolean allPruned[] = null;
 	/*boolean E_repeatEw = false;
@@ -161,15 +161,15 @@ boolean typeDep = false;
 	boolean entropyComp = false; //this *must* be false for the pairwise matrix energy computation
 	boolean compASdist = false;
 	boolean asDist[] = null;
-	float dist = 0.0f;
+	double dist = 0.0f;
 	int mutRes2Strand[] = null;
 	int mutRes2StrandMutIndex[] = null;
 	
 	double gamma = 0.01;
-	float epsilon = 0.03f;
+	double epsilon = 0.03f;
 	int numResidues = 0;
-	float stericThresh = -10000.0f;
-	float softStericThresh = -10000.0f;
+	double stericThresh = -10000.0f;
+	double softStericThresh = -10000.0f;
 	//int numInAS = 0;
 	
 	boolean computeEVEnergy = true;
@@ -180,7 +180,7 @@ boolean typeDep = false;
 	boolean repeatSearch = true;
 	boolean calculateVolumes = true;
 	boolean approxMinGMEC = false;
-	float lambda = (float)Math.pow(10, 38);
+	double lambda = (double)Math.pow(10, 38);
 	boolean distDepDielect = true;
 	double dielectConst = 1.0;
 	boolean doDihedE = false;
@@ -188,10 +188,10 @@ boolean typeDep = false;
 	double solvScale = 1.0;
 	double vdwMult = 1.0;
 	boolean scaleInt = false;
-	float maxIntScale = 1.0f;
+	double maxIntScale = 1.0f;
 	double stericE = Math.pow(10, 38);
 	boolean useEref = false;
-	float eRef[][] = null;
+	double eRef[][] = null;
 	int numberOfStrands = 0;
 	// Timing info (in seconds)
 	int q_Time[] = null;
@@ -215,7 +215,7 @@ boolean typeDep = false;
 	//Variables specific to PEM computation
 	int resMut[] = null;
 	String flagMutType = null;	
-	SamplingEEntries compEE[] = null;//initialized by the slave node, not by the master
+	SamplingEEntries compEE[] = new SamplingEEntries[0];//initialized by the slave node, not by the master
 	//int numLigRotamers = 0;	
 	int elapsedTime = 0; // timing info (in seconds)
 	
@@ -224,7 +224,7 @@ boolean typeDep = false;
 	boolean useSF = false;
 	boolean distrDACS = false;
 	boolean distrDEE = false;
-	boolean splitFlags[][] = null;
+	boolean splitFlags[][][][][][] = null;
 	String rotFileIn = null;
 	String sfFileIn = null;
 	String sfFileOut = null;
@@ -266,6 +266,16 @@ boolean typeDep = false;
         boolean addWTRot;
         boolean idealizeSC;
 
+        boolean useCCD;
+        boolean minimizePairwise = true;
+
+
+        double EConvTol;
+        double gradStep;
+
+        CETMatrix cetm;
+        boolean compCETM;
+        EPICSettings es;
 
 	CommucObj() {
 	}

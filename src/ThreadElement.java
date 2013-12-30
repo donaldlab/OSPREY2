@@ -135,7 +135,7 @@ public class ThreadElement {
 				}
 				else if(type == ThreadMessage.FLOAT){
 					for(int i=0; i<count;i++)
-						((float[])buf)[i] = (Float)objs[i];
+						((double[])buf)[i] = (Double)objs[i];
 				}
 				else{
 					for(int i=0; i<count;i++)

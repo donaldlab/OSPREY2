@@ -106,12 +106,12 @@ public class MutationManager
 	int numSplits = 0;
 	String AAallowed[][] = null;
 	String minDEEfile = null;
-	float initEw = 0.0f;
-	float pruningE = (float)Math.pow(10,38);
+	double initEw = 0.0f;
+	double pruningE = (double)Math.pow(10,38);
 	double gamma = 0.01;  // The gamma used in inter-mutation pruning
-	float epsilon = 0.03f;  // The epsilon used in intra-mutation pruning
-	float stericThresh = -10000.0f;
-	float softStericThresh = -10000.0f;
+	double epsilon = 0.03f;  // The epsilon used in intra-mutation pruning
+	double stericThresh = -10000.0f;
+	double softStericThresh = -10000.0f;
 	//int numInAS = 0;
 	int mutableSpots = 0;
 	boolean computeEVEnergy = true;
@@ -125,7 +125,7 @@ public class MutationManager
 	BigDecimal q_L = new BigDecimal("0.0");
 	ParamSet sParams = null;
 	boolean approxMinGMEC = false;
-	float lambda = (float)Math.pow(10,38);
+	double lambda = (double)Math.pow(10,38);
 	double stericE = Math.pow(10,38);
 	boolean distDepDielect = true;
 	double dielectConst = 1.0;
@@ -134,14 +134,14 @@ public class MutationManager
 	double solvScale = 1.0;
 	double vdwMult = 1.0;
 	boolean scaleInt = false;
-	float maxIntScale = 1.0f;
+	double maxIntScale = 1.0f;
 	boolean useEref = false;
-	float[][] eRef = null;
+	double[][] eRef = null;
 	boolean entropyComp = false; //this *must* be false for the pairwise matrix energy computation
-	float asasE[][][][] = null;
+	double asasE[][][][] = null;
 	boolean compASdist = false;
 	boolean asDist[][] = null;
-	float dist = 0.0f;
+	double dist = 0.0f;
 	int numberOfStrands = 0;
 	PrintStream logPS = null;
 	OneMutation mutArray[] = null;
@@ -155,11 +155,11 @@ public class MutationManager
 	//Variables specific to PEM computation	
 	PairwiseEnergyMatrix pairEMatrixMin = null;
 	PairwiseEnergyMatrix pairEMatrixMax = null;
-	//float[][] eRefMatrix = null;
-	float curMaxE = -(float)Math.pow(10,30);
+	//double[][] eRefMatrix = null;
+	double curMaxE = -(double)Math.pow(10,30);
 	//int numLigRotamers = 0;
 	
-	float pairEMatrixMinEntropy[][] = null;
+	double pairEMatrixMinEntropy[][] = null;
 	//KER: This is only used for the SCMF entropy run.
 	RotamerLibrary rotLib = null;
 	
@@ -202,6 +202,15 @@ public class MutationManager
         String pertFile;
         boolean addWTRot;
         boolean idealizeSC;
+
+        boolean useCCD;
+        boolean minimizePairwise = true;
+
+        double EConvTol;
+
+        boolean compCETM;//we are computing the level-set-based bound matrix
+        CETMatrix cetm;
+        EPICSettings es;
 	
 	// Generic constructor
 	MutationManager(String logName, OneMutation mArray[], boolean PEMcomputation) {
@@ -228,7 +237,10 @@ public class MutationManager
 	
 	// Returns the next mutation packaged in a communication object
 	public synchronized CommucObj getNextComObj(int curMutIndex) {
-		
+
+            //to debug a given residue pair's energy precomputation
+            //curMutIndex = 34;
+
 		CommucObj cObj = new CommucObj();
 		cObj.numberOfStrands = numberOfStrands;
 		cObj.strandMut = strandMut;
@@ -282,10 +294,23 @@ public class MutationManager
                     cObj.addWTRot = addWTRot;
                     cObj.idealizeSC = idealizeSC;
                 }
-                
+
+                cObj.useCCD = useCCD;
+                cObj.minimizePairwise = minimizePairwise;
+                cObj.es = es;
+
+                cObj.EConvTol = EConvTol;
+               
 		if (PEMcomp) {//PEM computation
 			
 			if (!entropyComp){
+
+                                cObj.compCETM = compCETM;
+                                if(compCETM){
+                                    cObj.prunedRot = prunedRot;
+                                    cObj.splitFlags = splitFlags;
+                                }
+
 				//cObj.numLigRotamers = numLigRotamers;
 				cObj.curStrForMatrix = curStrForMatrix;
 				cObj.flagMutType = mutArray[curMutIndex].flagMutType;
@@ -436,36 +461,42 @@ public class MutationManager
 
 	// Output a finished mutation to the results file
 	public synchronized void processFinishedMutation(CommucObj cObj) {
-		
+
 		if (PEMcomp){ //energy matrix computation
 			int countNewEntries = cObj.compEE.length;
 			//Update the E matrices computed so far with the new computations supplied
 			//	by the current cObj
 			if (!entropyComp){ //PEM computation
 				if(cObj.flagMutType.equals("INTRA")){
-					//KER: initialize eref to big E
-					for(int i=0; i<eRef.length;i++)
-						for(int j=0; j<eRef[i].length;j++)
-							eRef[i][j]=Float.MAX_VALUE;
-					//KER: I now output a separate Eref matrix
-					for (int i=0; i<countNewEntries; i++){
-						eRef[cObj.compEE[i].i1][cObj.compEE[i].i2] = Math.min(eRef[cObj.compEE[i].i1][cObj.compEE[i].i2],cObj.compEE[i].minE);	
-					}
-					//KER: Remove all of the bigE
-					for(int i=0; i<eRef.length;i++)
-						for(int j=0; j<eRef[i].length;j++)
-							if(eRef[i][j]==Float.MAX_VALUE)
-								eRef[i][j] = 0.0f;
-					outputObject(eRef,eRefMatrix+".dat");
+                                        if(!compCETM){//Don't regenerate eref matrix if computing cetm
+                                            //KER: initialize eref to big E
+                                            for(int i=0; i<eRef.length;i++)
+                                                    for(int j=0; j<eRef[i].length;j++)
+                                                            eRef[i][j]=Double.MAX_VALUE;
+                                            //KER: I now output a separate Eref matrix
+                                            for (int i=0; i<countNewEntries; i++){
+                                                    eRef[cObj.compEE[i].i1][cObj.compEE[i].i2] = Math.min(eRef[cObj.compEE[i].i1][cObj.compEE[i].i2],cObj.compEE[i].minE);
+                                            }
+                                            //KER: Remove all of the bigE
+                                            for(int i=0; i<eRef.length;i++)
+                                                    for(int j=0; j<eRef[i].length;j++)
+                                                            if(eRef[i][j]==Double.MAX_VALUE)
+                                                                    eRef[i][j] = 0.0f;
+                                            outputObject(eRef,eRefMatrix+".dat");
+                                        }
 				}
 				else{
-					for (int i=0; i<countNewEntries; i++){
+                                        if(compCETM)
+                                            cetm.mergeIn(cObj.cetm,cObj.resMut);
+                                        else{
+                                            for (int i=0; i<countNewEntries; i++){
                                             //We do not use the PairwiseEnergyMatrix.setPairwiseE method because we are setting all kinds of energies (pairwise, template, etc.)
                                             //by index
 						pairEMatrixMin.eMatrix[cObj.compEE[i].i1][cObj.compEE[i].i2][cObj.compEE[i].i3][cObj.compEE[i].i4][cObj.compEE[i].i5][cObj.compEE[i].i6] = cObj.compEE[i].minE;
 						if (doMinimization)
 							pairEMatrixMax.eMatrix[cObj.compEE[i].i1][cObj.compEE[i].i2][cObj.compEE[i].i3][cObj.compEE[i].i4][cObj.compEE[i].i5][cObj.compEE[i].i6] = cObj.compEE[i].maxE;
-					}
+                                            }
+                                        }
 				}
 			}
 			else { //entropy E matrix computation
@@ -575,7 +606,7 @@ public class MutationManager
 			}
 			else if (distrDACS){ //distributed DACS
 				bestScore = bestScore.min(cObj.bestScore);
-				pruningE = bestScore.floatValue();
+				pruningE = bestScore.doubleValue();
 				logPS.print("Completed mutation "+cObj.mutationNumber);
 				logPS.print(" Score "+cObj.bestScore);
 				logPS.print(" BestScore "+bestScore);
@@ -763,31 +794,31 @@ public class MutationManager
 	public void setMinDEEFileName(String mdf) {
 		minDEEfile = mdf;
 	}
-	public void setInitEw(float iew){
+	public void setInitEw(double iew){
 		initEw = iew;
 	}
-	public void setPruningE(float pe){
+	public void setPruningE(double pe){
 		pruningE = pe;
 	}
-	public float getPruningE(){
+	public double getPruningE(){
 		return pruningE;
 	}
 	public void setGamma(double g) {
 		gamma = g;
 	}
-	public void setEpsilon(float g) {
+	public void setEpsilon(double g) {
 		epsilon = g;
 	}
-	public void setEpsilon(double g) {
-		epsilon = (new Double(g)).floatValue();
-	}
+	/*public void setEpsilon(double g) {
+		epsilon = (new Double(g)).doubleValue();
+	}*/
 	public void setParams(ParamSet theParams) {
 		sParams = theParams;
 	}
-	public void setStericThresh(float st) {
+	public void setStericThresh(double st) {
 		stericThresh = st;
 	}
-	public void setSoftStericThresh(float st){
+	public void setSoftStericThresh(double st){
 		softStericThresh = st;
 	}
 	/*public void setNumInAS(int nas) {
@@ -818,11 +849,11 @@ public class MutationManager
 	/*public void setnumLigRotamers(int nlr) {
 		numLigRotamers = nlr;
 	}*/
-	public float[][] getErefMatrix(){
+	public double[][] getErefMatrix(){
 		return eRef;
 	}
 	
-	public void setErefMatrix(float eRef[][]){
+	public void setErefMatrix(double eRef[][]){
 		this.eRef = eRef;
 	}
 	public void setPairEMatrixMin(PairwiseEnergyMatrix pemMin){
@@ -891,7 +922,7 @@ public class MutationManager
 	public void setApproxMinGMEC(boolean amg){
 		approxMinGMEC = amg;
 	}
-	public void setLambda(float l){
+	public void setLambda(double l){
 		lambda = l;
 	}
 	public void setStericE(double se){
@@ -918,13 +949,13 @@ public class MutationManager
 	public void setScaleInt(boolean si){
 		scaleInt = si;
 	}
-	public void setMaxIntScale(float is){
+	public void setMaxIntScale(double is){
 		maxIntScale = is;
 	}
 	public void setUseEref(boolean uer){
 		useEref = uer;
 	}
-	public void setEref(float er[][]){
+	public void setEref(double er[][]){
 		eRef = er;
 	}
 	public void setLigPartFn(BigDecimal ql){
@@ -939,19 +970,19 @@ public class MutationManager
 	public PairwiseEnergyMatrix getMaxEmatrix(){
 		return pairEMatrixMax;
 	}
-	public void setPairEntropyMatrix(float aae[][][][]){
+	public void setPairEntropyMatrix(double aae[][][][]){
 		asasE = aae;
 	}
-	public float [][][][] getPairEntropyEmatrix(){
+	public double [][][][] getPairEntropyEmatrix(){
 		return asasE;
 	}
-	public void setIntraEntropyMatrixMin(float pemMin[][]){
+	public void setIntraEntropyMatrixMin(double pemMin[][]){
 		pairEMatrixMinEntropy = pemMin;
 	}
 	public void setASdistMatrix(boolean ad[][]){
 		asDist = ad;
 	}
-	public void setASdist(float d){
+	public void setASdist(double d){
 		dist = d;
 	}
 	public void setCompASdist(boolean ad){
@@ -960,7 +991,7 @@ public class MutationManager
 	public boolean [][] getASdistMatrix(){
 		return asDist;
 	}
-	public float [][] getMinEmatrixEntropy(){
+	public double [][] getMinEmatrixEntropy(){
 		return pairEMatrixMinEntropy;
 	}
 	public void setMutableSpots(int ms) {
@@ -1045,4 +1076,29 @@ public class MutationManager
         public void setMagicBulletTriples(boolean magicBulletTriples) {
             this.magicBulletTriples = magicBulletTriples;
         }
+
+        public void setMinimizePairwise(boolean minimizePairwise) {
+            this.minimizePairwise = minimizePairwise;
+        }
+
+        public void setUseCCD(boolean useCCD) {
+            this.useCCD = useCCD;
+        }
+
+        public void setEConvTol(double EConvTol) {
+            this.EConvTol = EConvTol;
+        }
+
+        public void setCompCETM(boolean compCETM) {
+            this.compCETM = compCETM;
+        }
+
+        public void setCETM(CETMatrix cetm) {
+            this.cetm = cetm;
+        }
+
+        public void setES(EPICSettings es) {
+            this.es = es;
+        }
+
 }

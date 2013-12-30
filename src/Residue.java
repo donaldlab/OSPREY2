@@ -273,10 +273,10 @@ public class Residue implements Serializable {
 	public void rotateResidue(Atom at1, double dx, double dy,
 		double dz, double thetaDeg, int atomList[], int numAtoms) {
 
-		float fx,fy,fz, tx,ty,tz;
-		fx = (new Double(dx)).floatValue();
-		fy = (new Double(dy)).floatValue();
-		fz = (new Double(dz)).floatValue();
+		double fx,fy,fz, tx,ty,tz;
+		fx = (new Double(dx)).doubleValue();
+		fy = (new Double(dy)).doubleValue();
+		fz = (new Double(dz)).doubleValue();
 		Atom pseudoAtom = new Atom("a", fx, fy, fz);
 
 		int atomNumber;
@@ -284,7 +284,7 @@ public class Residue implements Serializable {
 			return;
 
 		int numberOfCoordinatesx3 = numAtoms*3;
-		float temporaryCoordinates[] = new float[numberOfCoordinatesx3];
+		double temporaryCoordinates[] = new double[numberOfCoordinatesx3];
 		int qx3;
 		for(int q=0;q<numAtoms;q++) {
 			qx3 = q*3;
@@ -293,9 +293,9 @@ public class Residue implements Serializable {
 			temporaryCoordinates[qx3+2]=atom[atomList[q]].coord[2] - at1.coord[2];
 		}
 
-		float[][] rot_mtx = new float[3][3];
+		double[][] rot_mtx = new double[3][3];
 		RotMatrix rM = new RotMatrix();
-		rM.getRotMatrix(fx,fy,fz,(float) thetaDeg,rot_mtx);
+		rM.getRotMatrix(fx,fy,fz,(double) thetaDeg,rot_mtx);
 
 		for(int q=0;q<numAtoms;q++) {
 			qx3 = q*3;
@@ -312,9 +312,9 @@ public class Residue implements Serializable {
 
 	//Returns the distance (the minimum distance between a pair of non-hydrogen side-chain atoms) between the side-chains of this residue and res2;
 	//If bbAt is false, then only side-chain atoms are considered
-	public float getDist(Residue res2, boolean bbAt){
+	public double getDist(Residue res2, boolean bbAt){
 
-		float minDist = (float)Math.pow(10, 10);
+		double minDist = (double)Math.pow(10, 10);
 
 		for (int a1=0; a1<numberOfAtoms; a1++){
 
@@ -328,7 +328,7 @@ public class Residue implements Serializable {
 
 					if ( (!a2type.equalsIgnoreCase("H")) && (bbAt || (!res2.atom[a2].getIsBBatom()) ) ){
 
-						float curDist = getDist(atom[a1],res2.atom[a2]);
+						double curDist = getDist(atom[a1],res2.atom[a2]);
 						minDist = Math.min(minDist, curDist);
 					}
 				}
@@ -339,15 +339,15 @@ public class Residue implements Serializable {
 	}
 
 	//Returns the distance between the two atoms
-	private float getDist(Atom a1, Atom a2){
+	private double getDist(Atom a1, Atom a2){
 
-		float rijx, rijy, rijz, rij, rij2;
+		double rijx, rijy, rijz, rij, rij2;
 
 		rijx = a1.coord[0] - a2.coord[0];
 		rijy = a1.coord[1] - a2.coord[1];
 		rijz = a1.coord[2] - a2.coord[2];
 		rij2 = rijx * rijx + rijy * rijy + rijz * rijz;
-		rij = (float)Math.sqrt(rij2);
+		rij = (double)Math.sqrt(rij2);
 
 		return rij;
 	}

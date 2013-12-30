@@ -70,19 +70,19 @@ public class MinDEEIntervals extends DEE {
 	boolean scaleInt = false;
 	
 	//the distance between the closest side-chain atoms of each pair of active site residues (the ligand is not considered here) 
-	float asResDist[][] = null;
+	double asResDist[][] = null;
 	
 	//the max scale
-	float maxScale = 1.0f;
+	double maxScale = 1.0f;
 	
 	//the max distance at which an interaction between residues is counted
-	final float maxDist = 9.0f;
+	final double maxDist = 9.0f;
 
         
 	//constructor
 	MinDEEIntervals(PairwiseEnergyMatrix arpMatrix, PairwiseEnergyMatrix arpMatrixMax, int numResMutable,
 			int strMut[][],	StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, 
-			boolean scInt, float dist[][], float maxSc, int mutRes2StrandP[], int mutRes2MutIndexP[], boolean doPerts) {
+			boolean scInt, double dist[][], double maxSc, int mutRes2StrandP[], int mutRes2MutIndexP[], boolean doPerts) {
 
                 init(arpMatrix, arpMatrixMax, numResMutable,
 			strMut, 0, strandLRot, prunedRotAtRes, true, null, null,
@@ -108,7 +108,7 @@ public class MinDEEIntervals extends DEE {
 	
 	//Determines the scaling factor for the interval term;
 	//		Uses a distance-dependent function
-	private float getScaleFactor(int pos1, int pos2){
+	private double getScaleFactor(int pos1, int pos2){
 		
 		if (!scaleInt)
 			return 1.0f;
@@ -120,7 +120,7 @@ public class MinDEEIntervals extends DEE {
 					return 0.0f;
 				else {
 					double k = 2.0;
-					float sf = maxScale * (float)Math.pow(( 1 - (float)Math.pow( (asResDist[pos1][pos2]/maxDist),(1/k) )),k);
+					double sf = maxScale * (double)Math.pow(( 1 - (double)Math.pow( (asResDist[pos1][pos2]/maxDist),(1/k) )),k);
 					return sf;
 				}
 			//}
@@ -272,10 +272,10 @@ public class MinDEEIntervals extends DEE {
 				for (int curPos2=0; curPos2<curPos1; curPos2++){
 					if (curPos2 != withoutPos){
 						
-						float sf = 1.0f;
+						double sf = 1.0f;
 						if (scaleInt){
-							float sf1 = getScaleFactor(curPos1,withoutPos);
-							float sf2 = getScaleFactor(curPos2,withoutPos);
+							double sf1 = getScaleFactor(curPos1,withoutPos);
+							double sf2 = getScaleFactor(curPos2,withoutPos);
 							sf = (sf1+sf2)/2.0f;
 						}
 					

@@ -54,7 +54,7 @@
 //     PGC        Pablo Gainza C.       Duke University         pablo.gainza@duke.edu
 //     MAH        Mark A. Hallen	Duke University         mah43@duke.edu
 ///////////////////////////////////////////////////////////////////////////////////////////////
-
+import java.util.ArrayList;
 /**
 * Written by Ivelin Georgiev (2004-2009)
 * 
@@ -68,10 +68,11 @@ public class DEEGoldstein extends DEE {
 
 	//constructor
 	DEEGoldstein(PairwiseEnergyMatrix arpMatrix, PairwiseEnergyMatrix arpMatrixMax, int numResMutable,
-			int strMut[][], float initEw, 
+			int strMut[][], double initEw, 
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean doMin, double indInt[], 
 			double pairInt[], boolean spFlags[][][][][][], boolean useSF, boolean minBB,
-			int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean iMinDEE, float Ival, boolean doPerts) {
+			int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean iMinDEE, 
+                        double Ival, boolean doPerts) {
 
 
                 init(arpMatrix, arpMatrixMax, numResMutable,
@@ -162,13 +163,8 @@ public class DEEGoldstein extends DEE {
 	 */
 	private boolean CanEliminate (int posNum, int AANumAtPos, int rotNumAtPos){
 		
-		double minIndVoxelE, maxIndVoxelE;
-		double indVoxelInterval, pairVoxelInterval;
-		double minDiffPairVoxelE;
-		
-		
-		double checkSum;
-		
+		double minIndVoxelE;		
+				
 		//In the energy matrix, column 0 gives the individual energies for each r at i;
 		//skip row 0, as the individual energies start from row 1 (and are all in column 0)
 		//index_r = posNum*numTotalRot + rotIndOffset[AANumAtPos] + rotNumAtPos;
@@ -181,16 +177,6 @@ public class DEEGoldstein extends DEE {
 			
 			if ( minIndVoxelE >=stericE) //rotamer incompatible with template, so prune
 				return true;
-	
-			// 2010: Don't compute the intervals if doIMinDEE is true since they are not necessary
-			if (doMinimize && !doIMinDEE){ //MinDEE, so compute the interval terms
-				indVoxelInterval = indIntMinDEE[posNum];							//formula term 3
-				pairVoxelInterval = pairIntMinDEE[posNum];							//formula term 4
-			}
-			else { //traditional-DEE, so no interval terms
-				indVoxelInterval = 0.0;
-				pairVoxelInterval = 0.0;
-			}
 			
 			//For the particular position, compare the energy performance (one by one)
 			//of the remaining rotamer possibilities to that of the given rotamer:
@@ -211,26 +197,13 @@ public class DEEGoldstein extends DEE {
 							
 					//if t and r are not actually the same rotamer of the same AA
 					if (!((altAA==AANumAtPos)&&(altRot==rotNumAtPos))){
-						
-						//at this point, we know what r at i and t at i are
-												
-						maxIndVoxelE = pairwiseMaxEnergyMatrix.getIntraAndShellE( posNum, altAA, altRot );//formula term 2
-						
-						//if ((maxIndVoxelE<=stericEThreshIntra)&&(maxShellResE<=stericEThreshPair)){//check only if not an unallowed steric
-                                                if ((!eliminatedRotAtPos.get(posNum,altAA,altRot))){ //not pruned
-						
-							minDiffPairVoxelE = SumMinDiffPVE(posNum, AANumAtPos, rotNumAtPos, altAA, altRot);	//formula term 5
-							
-							checkSum = -templateInt + minIndVoxelE - maxIndVoxelE
-										- indVoxelInterval - pairVoxelInterval + minDiffPairVoxelE;
-							
-							if (checkSum > curEw){
-								return true;
-                                                        }//this rotamer can be pruned/eliminated
-							else {
-								minDiff = Math.max(minDiff,checkSum);
-                                                        }
-						}
+
+                                            //if ((maxIndVoxelE<=stericEThreshIntra)&&(maxShellResE<=stericEThreshPair)){//check only if not an unallowed steric
+                                            if ((!eliminatedRotAtPos.get(posNum,altAA,altRot))){ //not pruned
+
+                                                if( canEliminateUsing(posNum,AANumAtPos,rotNumAtPos,altAA,altRot) )
+                                                    return true;
+                                            }
 					}
 				}
                             }
@@ -243,7 +216,41 @@ public class DEEGoldstein extends DEE {
 		//of them is able to prune the given rotamer, so we return false
 		return false;
 	}
-	
+
+
+
+        private boolean canEliminateUsing (int posNum, int AANumAtPos, int rotNumAtPos, int altAA, int altRot){
+            //Can we prune rotamer (posNum,AANumAtPos,rotNumAtPos) using rotamer (posNum,altAA,altRot)?
+            //at this point, we know what r at i and t at i are
+
+            double minIndVoxelE = pairwiseMinEnergyMatrix.getIntraAndShellE( posNum, AANumAtPos, rotNumAtPos );//formula term 1
+            double maxIndVoxelE = pairwiseMaxEnergyMatrix.getIntraAndShellE( posNum, altAA, altRot );//formula term 2
+            double indVoxelInterval, pairVoxelInterval;
+
+            // 2010: Don't compute the intervals if doIMinDEE is true since they are not necessary
+            if (doMinimize && !doIMinDEE){ //MinDEE, so compute the interval terms
+                    indVoxelInterval = indIntMinDEE[posNum];							//formula term 3
+                    pairVoxelInterval = pairIntMinDEE[posNum];							//formula term 4
+            }
+            else { //traditional-DEE, so no interval terms
+                    indVoxelInterval = 0.0;
+                    pairVoxelInterval = 0.0;
+            }
+
+            double minDiffPairVoxelE = SumMinDiffPVE(posNum, AANumAtPos, rotNumAtPos, altAA, altRot);	//formula term 5
+
+            double checkSum = -templateInt + minIndVoxelE - maxIndVoxelE
+                                    - indVoxelInterval - pairVoxelInterval + minDiffPairVoxelE;
+
+            if (checkSum > curEw){
+                return true;
+            }//this rotamer can be pruned/eliminated
+            else {
+                minDiff = Math.max(minDiff,checkSum);
+                return false;
+            }
+        }
+
 	////////////////////////////////////////////////////////////////////////
 
 	//////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,2 @@
+This is a DEE test case employing DEEPer and EPIC.
+An example script to run it is provided as 1CC8_pert.q, assuming the build directory is as listed in that file.  The libraries (Colt, etc.) are used for EPIC and the CCDMinimizer.

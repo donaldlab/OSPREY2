@@ -59,16 +59,13 @@
  *	
  */
 
-import java.io.*;
-import java.io.PrintStream;
-import java.util.*;
 
 /**
  * This is the main class for the KStar program; essentially just a wrapper for the KSParser class.
  */
 public class KStar
 {
-		
+    	
 	public static void main (String[] args)
 	{
 		KSParser parser = new KSParser();

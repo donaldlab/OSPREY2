@@ -3,21 +3,21 @@
 
 	OSPREY Protein Redesign Software Version 2.1 beta
 	Copyright (C) 2001-2012 Bruce Donald Lab, Duke University
-
+	
 	OSPREY is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Lesser General Public License as
-	published by the Free Software Foundation, either version 3 of
+	it under the terms of the GNU Lesser General Public License as 
+	published by the Free Software Foundation, either version 3 of 
 	the License, or (at your option) any later version.
-
+	
 	OSPREY is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 	GNU Lesser General Public License for more details.
-
+	
 	You should have received a copy of the GNU Lesser General Public
 	License along with this library; if not, see:
 	      <http://www.gnu.org/licenses/>.
-
+		
 	There are additional restrictions imposed on the use and distribution
 	of this open-source code, including: (A) this header must be included
 	in any modification or extension of the code; (B) you are required to
@@ -25,17 +25,17 @@
 	for the various different modules of our software, together with a
 	complete list of requirements and restrictions are found in the
 	document license.pdf enclosed with this distribution.
-
+	
 	Contact Info:
 			Bruce Donald
 			Duke University
 			Department of Computer Science
 			Levine Science Research Center (LSRC)
 			Durham
-			NC 27708-0129
+			NC 27708-0129 
 			USA
 			e-mail:   www.cs.duke.edu/brd/
-
+	
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
 */
@@ -77,16 +77,16 @@ public class PMinimizer extends SimpleMinimizer {
         int numPerturbations = 0;//number of perturbations; also the size of the next 5 arrays
 
         int pertList[];//List of perturbations (indices in m.perts)
-        float pertParamValues[];//Current parameter values for the perturbations
+        double pertParamValues[];//Current parameter values for the perturbations
 
-        float pertStepSize[];//Step sizes for each perturbation
-        float pertParamMax[];//Maxima for each perturbation's parameter
-        float pertParamMin[];//Minima for each perturbation's parameter
+        double pertStepSize[];//Step sizes for each perturbation
+        double pertParamMax[];//Maxima for each perturbation's parameter
+        double pertParamMin[];//Minima for each perturbation's parameter
 
 
         int flexResMap[];//Map from molecule residue number to index among flexible 
         //residues (and thus in the partial arrays for energy calculations)
-        //(needed because perturbations' resAffected arrays contain molecule residue numbers)
+        //(needed because perturbations' resDirectlyAffected arrays contain molecule residue numbers)
 
 
         boolean checkMonotonic = false;//This activates an alternate stopping condition that detects when the minimization stops improving
@@ -107,14 +107,14 @@ public class PMinimizer extends SimpleMinimizer {
 
                 if(minimizePerturbations){
                     flexResMap = new int[m.residue.length];
-                    setupPerturbations(false);
+                    setupPerturbations();
                 }
 	}	
 
 
 
 
-        public void setupPerturbations(boolean hasLig){//Set up perturbation information
+        public void setupPerturbations(){//Set up perturbation information
 
                 HashSet<Integer> pertSet=new HashSet<Integer>();
 
@@ -145,10 +145,10 @@ public class PMinimizer extends SimpleMinimizer {
 
                 //Finish preparing perturbation info
                 pertList=new int[numPerturbations];
-                pertParamValues=new float[numPerturbations];
-                pertStepSize=new float[numPerturbations];
-                pertParamMax=new float[numPerturbations];
-                pertParamMin=new float[numPerturbations];
+                pertParamValues=new double[numPerturbations];
+                pertStepSize=new double[numPerturbations];
+                pertParamMax=new double[numPerturbations];
+                pertParamMin=new double[numPerturbations];
 
                 int a=0;
                 for(Integer pertNum : pertSet){
@@ -181,19 +181,19 @@ public class PMinimizer extends SimpleMinimizer {
 
 
 
-        private void doPerturbationStep (int pertNum, float stepSize){//Calculates and applies the next perturbation parameter value in the steepest-descent minimization
+        private void doPerturbationStep (int pertNum, double stepSize){//Calculates and applies the next perturbation parameter value in the steepest-descent minimization
             
                 double initialEnergy, secondEnergy, thirdEnergy;
                 Perturbation pert = m.perts[pertList[pertNum]];
 
-                initialEnergy = getMultiResidueEnergy(pert.resAffected);//Just need energy for the units affected by the perturbation with
+                initialEnergy = getMultiResidueEnergy(pert.resDirectlyAffected);//Just need energy for the units affected by the perturbation with
                 //energy calculation flags set to true
 
 		// Apply the perturbation with positive step, then negative step, and compute energies
                 pert.changePerturbationParameter(pertParamValues[pertNum]+stepSize);
-		secondEnergy = getMultiResidueEnergy(pert.resAffected);
+		secondEnergy = getMultiResidueEnergy(pert.resDirectlyAffected);
                 pert.changePerturbationParameter(pertParamValues[pertNum]-stepSize);
-		thirdEnergy = getMultiResidueEnergy(pert.resAffected);
+		thirdEnergy = getMultiResidueEnergy(pert.resDirectlyAffected);
 
                 //Now compute the change in the perturbation parameter, change pertParamValues appropriately
 		if ((initialEnergy > secondEnergy)&&(initialEnergy > thirdEnergy)){
@@ -246,9 +246,9 @@ public class PMinimizer extends SimpleMinimizer {
 
                 setupPertStates();//Make sure the correct perturbation states are assigned to each residue
 
-                float tempPertStep[] = new float[numPerturbations];//Temporary step sizes, which will start at the pertStepSize values
+                double tempPertStep[] = new double[numPerturbations];//Temporary step sizes, which will start at the pertStepSize values
                 //and then will be reduced over the course of minimization
-                float deltaPertStepSize[] = new float[numPerturbations];
+                double deltaPertStepSize[] = new double[numPerturbations];
                 if(minimizePerturbations){
                     System.arraycopy(pertStepSize, 0, tempPertStep, 0, numPerturbations);
                     for(int a=0;a<numPerturbations;a++)
@@ -256,14 +256,14 @@ public class PMinimizer extends SimpleMinimizer {
                 }
 
                 
-		float step = initialAngleStepSize;
+		double step = initialAngleStepSize;
 		double lmaxMovement = maxMovement;
 			// maximum degrees by which a torsion can
 			//  cumulatively change
-		float strRotStep = RotStep;
+		double strRotStep = RotStep;
 			// step size for the rigid rotation
 			//  of the ligand
-		float strTransStep = TransStep;
+		double strTransStep = TransStep;
 			// step size in � for the rigid ligand
 			//  translation
 		double strMaxTrans = MaxTrans;
@@ -324,9 +324,9 @@ public class PMinimizer extends SimpleMinimizer {
 				System.exit(1);
 		}
 
-		float deltaStep = step / numSteps;
-		float deltaRotStep = strRotStep / numSteps;
-		float deltaTransStep = strTransStep / numSteps;
+		double deltaStep = step / numSteps;
+		double deltaRotStep = strRotStep / numSteps;
+		double deltaTransStep = strTransStep / numSteps;
 
 			// numFlexRes, flexResAtomList, and flexResListSize include the ligand if one exists
 			/*if(ligStrNum != -1)
@@ -446,11 +446,14 @@ public class PMinimizer extends SimpleMinimizer {
             //(THIS MAY BE TOO INEFFICIENT--IF SO THE PARTIAL ARRAYS NEED TO BE REORGANIZED)
             double totEnergy[];
 
+            if(!m.validBB)
+                return Double.POSITIVE_INFINITY;
+
             int calcRes = -1;
             for(int a=0; a<molResNum.length; a++){
 
                 if( ! m.residue[molResNum[a]].validConf )//If the perturbation change whose energy we're getting caused an invalid conformation, we apply an infinite energy penalty
-                        return Float.POSITIVE_INFINITY;
+                        return Double.POSITIVE_INFINITY;
 
                 boolean needEnergy = m.residue[molResNum[a]].getEnergyEvalBB() || m.residue[molResNum[a]].getEnergyEvalSC();//Do we need the energy for this residue?
                 if(needEnergy){

@@ -104,7 +104,7 @@ public class BoundFlags extends DEE {
 	
 	//constructor
 	BoundFlags(PairwiseEnergyMatrix arpMatrix, int numResMutable, int strMut[][], StrandRotamers strandLRot[], double pruneE,
-			PrunedRotamers<Boolean> prunedRotAtRes, boolean spFlags[][][][][][], boolean useSF, float initEw, 
+			PrunedRotamers<Boolean> prunedRotAtRes, boolean spFlags[][][][][][], boolean useSF, double initEw, 
 			int mutRes2StrandP[], int mutRes2MutIndexP[], boolean doPerts) {
 
 

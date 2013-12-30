@@ -55,12 +55,12 @@
 public class ConfPair implements Comparable{
 	int[] conf;
 	//minE: 0 unMinE: 1
-	float[] energy;
-	public ConfPair(int[] conformation, float[] e){
+	double[] energy;
+	public ConfPair(int[] conformation, double[] e){
 		conf = new int[conformation.length];
 		for(int i=0; i<conformation.length;i++)
 			conf[i] = conformation[i];
-		energy = new float[e.length];
+		energy = new double[e.length];
 		for(int i=0; i<e.length;i++)
 			energy[i] = e[i];
 		
@@ -71,7 +71,7 @@ public class ConfPair implements Comparable{
 		// TODO Auto-generated method stub
 		if(!(o instanceof ConfPair))
 			throw new ClassCastException("Another confPair was expected.");
-		float otherE = ((ConfPair) o).energy[0];
+		double otherE = ((ConfPair) o).energy[0];
 		if(otherE >= energy[0])
 			return 1;
 		else

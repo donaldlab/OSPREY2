@@ -74,16 +74,16 @@ public class DEEGoldsteinPairs extends DEE {
 		
 		
 	//the max scaling factor for the interval terms
-	float maxScale = 1.0f;
+	double maxScale = 1.0f;
 	
 
 	//constructor
 	DEEGoldsteinPairs(PairwiseEnergyMatrix arpMatrix, PairwiseEnergyMatrix arpMatrixMax, int numResMutable,
-			int strMut[][], float initEw, 
+			int strMut[][], double initEw, 
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean residueMut[],
 			boolean doMin, boolean spFlags[][][][][][], boolean useSF, boolean mb, boolean dDEE, boolean minBB, 
-                        boolean scaleInt, float maxSc, int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE,
-                        float aIval, boolean tripFlags[][][][][][][][][], boolean doPerts) {
+                        boolean scaleInt, double maxSc, int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE,
+                        double aIval, boolean tripFlags[][][][][][][][][], boolean doPerts) {
 
 
                 init(arpMatrix, arpMatrixMax, numResMutable,

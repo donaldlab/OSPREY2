@@ -165,7 +165,7 @@ public class AminoAcidTemplates implements Serializable {
 				tmpName = getToken(curLine,2);
 				at.changeType(tmpName);
 				at.forceFieldType = getToken(curLine,3);
-				at.charge = (float) (new Float(getToken(curLine,11)).floatValue());
+				at.charge = (double) (new Double(getToken(curLine,11)).doubleValue());
 				at.isBBatom = at.setIsBBatom();
 				//KER: The first atom is bonded to a dummy atom so we can't include that
 				//KER: in the bond list, so check atom is >= 0
@@ -246,7 +246,7 @@ public class AminoAcidTemplates implements Serializable {
 						for(Atom a:r.atom){
 							if(a.name.equalsIgnoreCase(getToken(curLine,1))){
 								foundAtom = true;
-								a.setCoords(new Float(getToken(curLine,2)), new Float(getToken(curLine,3)), new Float(getToken(curLine,4)));
+								a.setCoords(new Double(getToken(curLine,2)), new Double(getToken(curLine,3)), new Double(getToken(curLine,4)));
 								break;
 							}
 						}
@@ -314,7 +314,7 @@ public class AminoAcidTemplates implements Serializable {
 				tmpName = getToken(curLine,2);
 				at.changeType(tmpName);
 				at.forceFieldType = getToken(curLine,3);
-				at.charge = (float) (new Float(getToken(curLine,11)).floatValue());
+				at.charge = (double) (new Double(getToken(curLine,11)).doubleValue());
 				at.isBBatom = at.setIsBBatom();
 				at.addBond(((new Integer(getToken(curLine,5))).intValue())-dumPresent);
 				newRes.addAtom(at);  // add atom
@@ -381,7 +381,7 @@ public class AminoAcidTemplates implements Serializable {
 				tmpName = getToken(curLine,2);
 				at.changeType(tmpName);
 				at.forceFieldType = getToken(curLine,3);
-				at.charge = (float) (new Float(getToken(curLine,11)).floatValue());
+				at.charge = (double) (new Double(getToken(curLine,11)).doubleValue());
 				at.isBBatom = at.setIsBBatom();
 				at.addBond(((new Integer(getToken(curLine,5))).intValue())-dumPresent);
 				newRes.addAtom(at);  // add atom

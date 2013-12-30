@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	TripeptideClosure.java
@@ -67,7 +67,10 @@ Volume 25, Issue 4, Pages 510 - 528 (2004)
  * (same with SturmSolver, which it uses to solve polynomial equations)
  * 
  */
-public class TripeptideClosure {
+import java.io.Serializable;
+
+
+public class TripeptideClosure implements Serializable {
 
 //!----------------------------------------------------------------------
 //! Copyright (C) 2003
@@ -153,9 +156,9 @@ public class TripeptideClosure {
       double CCoord[][] = new double[3][3];
 
       for(int a=0;a<3;a++){
-          float NCoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("N") );
-          float CACoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("CA") );
-          float CCoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("C") );
+          double NCoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("N") );
+          double CACoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("CA") );
+          double CCoordf[] = m.getActualCoord( m.residue[res[a]].getAtomNameToMolnum("C") );
 
           for(int b=0;b<3;b++){
               NCoord[a][b] = NCoordf[b];
@@ -319,40 +322,6 @@ public int solve_3pep_poly( double r_n1[], double r_a1[], double r_a3[], double 
 
   return n_soln;
  }
-
-
-public int solve_3pep_poly ( float r_n1[], float r_a1[], float r_a3[], float r_c3[], float r_soln_n[][][],
-        float r_soln_a[][][], float r_soln_c[][][] ){
-        //This version is for use in calling solve_3pep_poly from methods based on single precision
-
-
-    double[] r_n1_d = new double[3], r_a1_d = new double[3], r_a3_d = new double[3], r_c3_d = new double[3];
-
-    for(int a=0; a<3; a++){
-        r_n1_d[a] = r_n1[a];
-        r_a1_d[a] = r_a1[a];
-        r_a3_d[a] = r_a3[a];
-        r_c3_d[a] = r_c3[a];
-    }
-
-    double[][][] r_soln_n_d = new double[16][3][3], r_soln_a_d = new double[16][3][3],
-            r_soln_c_d = new double[16][3][3];
-
-    int ans = solve_3pep_poly(r_n1_d, r_a1_d, r_a3_d, r_c3_d, r_soln_n_d, r_soln_a_d, r_soln_c_d);
-
-    for(int a=0; a<16; a++){
-        for(int b=0; b<3; b++){
-            for(int c=0; c<3; c++){
-                r_soln_n[a][b][c] = (float)r_soln_n_d[a][b][c];
-                r_soln_a[a][b][c] = (float)r_soln_a_d[a][b][c];
-                r_soln_c[a][b][c] = (float)r_soln_c_d[a][b][c];
-            }
-        }
-    }
-
-    return ans;
-}
-
 
 
 public void get_input_angles(double r_n1[], double r_a1[], double r_a3[], double r_c3[])

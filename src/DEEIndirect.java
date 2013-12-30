@@ -64,18 +64,18 @@ public class DEEIndirect extends DEE {
 	//useFlags and useMinDEEPruningEw are not used
     //because we always use flags and iMinDEE is assumed if doing minimization
 
-        private float pairK[][][][][];//Precomputed K(i_r,i_t) matrix
+        private double pairK[][][][][];//Precomputed K(i_r,i_t) matrix
         boolean inZ[];//Indicates which of the flexible residue positions are in the pruning zone
 
         int prunedSinglesCurRun;
         int prunedPairsCurRun;
 
 	//constructor
-	DEEIndirect (PairwiseEnergyMatrix arpMatrix, int numResMutable, int strMut[][], float initEw,
+	DEEIndirect (PairwiseEnergyMatrix arpMatrix, int numResMutable, int strMut[][], double initEw,
 			StrandRotamers strandLRot[], PrunedRotamers<Boolean> prunedRotAtRes, boolean residueMut[],
 			boolean doMin, boolean spFlags[][][][][][], boolean mb, boolean dDEE, boolean minBB,
                         int mutRes2StrandP[], int mutRes2MutIndexP[], boolean typeDep, boolean aIMinDEE,
-                        float aIval, boolean tripFlags[][][][][][][][][], boolean doPerts, boolean inZ[]) {
+                        double aIval, boolean tripFlags[][][][][][][][][], boolean doPerts, boolean inZ[]) {
 
                 init(arpMatrix, null, numResMutable,
 			strMut, initEw, strandLRot, prunedRotAtRes, doMin, null, null,
@@ -91,7 +91,7 @@ public class DEEIndirect extends DEE {
                 }
 
                 //Now allocate space for pairK
-                pairK = new float[numMutable][][][][];
+                pairK = new double[numMutable][][][][];
 
                 for(int pos=0; pos<numMutable; pos++){
 
@@ -100,20 +100,20 @@ public class DEEIndirect extends DEE {
                         int str=mutRes2Strand[pos];
                         int strResNum=strandMut[str][mutRes2MutIndex[pos]];
 
-                        pairK[pos] = new float[strandRot[str].rl.getNumAAallowed()][][][];
+                        pairK[pos] = new double[strandRot[str].rl.getNumAAallowed()][][][];
 
                         for(int AA=0; AA<numAAtypes[pos]; AA++){
                             int curAA = strandRot[str].getIndexOfNthAllowable(strResNum,AA);
                             int numRot = getNumRot(str, strResNum, curAA);
-                            pairK[pos][curAA] = new float[numRot][][];
+                            pairK[pos][curAA] = new double[numRot][][];
 
                             for(int rot=0; rot<numRot; rot++){
-                                pairK[pos][curAA][rot] = new float[strandRot[str].rl.getNumAAallowed()][];
+                                pairK[pos][curAA][rot] = new double[strandRot[str].rl.getNumAAallowed()][];
 
                                 for(int AA2=0; AA2<numAAtypes[pos]; AA2++){
                                     int curAA2 = strandRot[str].getIndexOfNthAllowable(strResNum,AA2);
                                     int numRot2 = getNumRot(str, strResNum, curAA2);
-                                    pairK[pos][curAA][rot][curAA2] = new float[numRot2];
+                                    pairK[pos][curAA][rot][curAA2] = new double[numRot2];
                                 }
                             }
                         }
@@ -345,7 +345,7 @@ public class DEEIndirect extends DEE {
                                                                 int str2=mutRes2Strand[pos2];
                                                                 int strResNum2=strandMut[str2][mutRes2MutIndex[pos2]];
 
-                                                                float Kmaxmin = Float.NEGATIVE_INFINITY;
+                                                                double Kmaxmin = Double.NEGATIVE_INFINITY;
 
                                                                 for(int AAs=0; AAs<numAAtypes[pos2]; AAs++){
                                                                     int sAA = strandRot[str2].getIndexOfNthAllowable(strResNum2, AAs);
@@ -356,7 +356,7 @@ public class DEEIndirect extends DEE {
                                                                                     || splitFlags[pos2][sAA][sRot][posNum][altAA][altRot] )
                                                                                 continue;//Don't use this j_s
 
-                                                                            float sKmin = Float.POSITIVE_INFINITY;
+                                                                            double sKmin = Double.POSITIVE_INFINITY;
 
                                                                             for(int AAu=0; AAu<numAAtypes[pos2]; AAu++){
 
@@ -374,7 +374,7 @@ public class DEEIndirect extends DEE {
                                                                                 }
                                                                             }
 
-                                                                            if(sKmin == Float.POSITIVE_INFINITY)
+                                                                            if(sKmin == Double.POSITIVE_INFINITY)
                                                                                 return true;//Rotamer r can be pruned because it is incompatible with all unpruned rotamers at pos2
 
                                                                             if(sKmin > Kmaxmin){
@@ -393,8 +393,8 @@ public class DEEIndirect extends DEE {
                                                                     }
                                                                 }
 
-                                                                if(Kmaxmin == Float.NEGATIVE_INFINITY){
-                                                                    checkSum = Float.NEGATIVE_INFINITY;
+                                                                if(Kmaxmin == Double.NEGATIVE_INFINITY){
+                                                                    checkSum = Double.NEGATIVE_INFINITY;
                                                                     break;//r will not be pruned using t
                                                                 }
 
@@ -509,7 +509,7 @@ public class DEEIndirect extends DEE {
                     int strResNumj=strandMut[strj][mutRes2MutIndex[posj]];
 
 
-                    float Kmaxmin = Float.NEGATIVE_INFINITY;
+                    double Kmaxmin = Double.NEGATIVE_INFINITY;
 
                     for(int AAs=0; AAs<numAAtypes[posj]; AAs++){
                         int sAA = strandRot[strj].getIndexOfNthAllowable(strResNumj, AAs);
@@ -527,7 +527,7 @@ public class DEEIndirect extends DEE {
                                 //This is checked after lower-order pruning to make sure we don't call this function for pruned rotamers
 
 
-                                float sKmin = Float.POSITIVE_INFINITY;
+                                double sKmin = Double.POSITIVE_INFINITY;
 
                                 for(int AAu=0; AAu<numAAtypes[posj]; AAu++){
                                     int uAA = strandRot[strj].getIndexOfNthAllowable(strResNumj, AAu);
@@ -548,7 +548,7 @@ public class DEEIndirect extends DEE {
                                     }
                                 }
 
-                                if ( sKmin == Float.POSITIVE_INFINITY )
+                                if ( sKmin == Double.POSITIVE_INFINITY )
                                     return true;
                                 //In this case, there is no rotamer u at posj that is compatible with both r1 at pos1 and r2 at pos1
                                 //So the rotamer pair (r1 at pos1, r2 at pos2) is impossible
@@ -569,7 +569,7 @@ public class DEEIndirect extends DEE {
                         }
                     }
 
-                    if(Kmaxmin == Float.NEGATIVE_INFINITY)
+                    if(Kmaxmin == Double.NEGATIVE_INFINITY)
                         return false;
                     //This messes up the pruning of (r1 at pos1, r2 at pos2)
                     //So go try to find some other competitor pair
@@ -601,8 +601,8 @@ public class DEEIndirect extends DEE {
                     int strj=mutRes2Strand[posj];
                     int strResNumj=strandMut[strj][mutRes2MutIndex[posj]];
 
-                    float minTerm = Float.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) over j_s in R_(j,i_r)
-                    float maxTerm = Float.NEGATIVE_INFINITY;//This will be the maximum E(i_t,j_s) over j_s in R(j,i_t)
+                    double minTerm = Double.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) over j_s in R_(j,i_r)
+                    double maxTerm = Double.NEGATIVE_INFINITY;//This will be the maximum E(i_t,j_s) over j_s in R(j,i_t)
 
                     for(int AAs=0; AAs<numAAtypes[posj]; AAs++){
                         int sAA = strandRot[strj].getIndexOfNthAllowable(strResNumj, AAs);
@@ -616,7 +616,7 @@ public class DEEIndirect extends DEE {
                             if( ! ( splitFlags[pos1][r1AA][r1Rot][posj][sAA][sRot]
                                     || splitFlags[pos2][r2AA][r2Rot][posj][sAA][sRot]
                                     || isPrunedTriple(pos1,r1AA,r1Rot,pos2,r2AA,r2Rot,posj,sAA,sRot) ) ) {
-                                float checkMin = pairwiseMinEnergyMatrix.getPairwiseE( pos2, r2AA, r2Rot, posj, sAA, sRot );
+                                double checkMin = pairwiseMinEnergyMatrix.getPairwiseE( pos2, r2AA, r2Rot, posj, sAA, sRot );
                                 if(posj<pos1)
                                     checkMin += pairwiseMinEnergyMatrix.getPairwiseE( pos1, r1AA, r1Rot, posj, sAA, sRot );
                                 if ( checkMin < minTerm )
@@ -624,7 +624,7 @@ public class DEEIndirect extends DEE {
                             }
                             if( ! ( splitFlags[pos1][t1AA][t1Rot][posj][sAA][sRot] || splitFlags[pos2][t2AA][t2Rot][posj][sAA][sRot]
                                     || isPrunedTriple(pos1,t1AA,t1Rot,pos2,t2AA,t2Rot,posj,sAA,sRot) ) ){
-                                float checkMax = pairwiseMinEnergyMatrix.getPairwiseE( pos2, t2AA, t2Rot, posj, sAA, sRot );
+                                double checkMax = pairwiseMinEnergyMatrix.getPairwiseE( pos2, t2AA, t2Rot, posj, sAA, sRot );
                                 if(posj<pos1)
                                     checkMax += pairwiseMinEnergyMatrix.getPairwiseE( pos1, t1AA, t1Rot, posj, sAA, sRot );
                                 if ( checkMax > maxTerm )
@@ -634,10 +634,10 @@ public class DEEIndirect extends DEE {
                     }
 
 
-                    if(minTerm == Float.POSITIVE_INFINITY)
+                    if(minTerm == Double.POSITIVE_INFINITY)
                         return true;//(r1, r2) can be pruned because it is incompatible with all rotamers at posj
 
-                    if(maxTerm == Float.NEGATIVE_INFINITY){
+                    if(maxTerm == Double.NEGATIVE_INFINITY){
                         splitFlags[pos1][t1AA][t1Rot][pos2][t2AA][t2Rot] = true;
                         splitFlags[pos2][t2AA][t2Rot][pos1][t1AA][t1Rot] = true;
                         prunedPairsCurRun++;
@@ -661,7 +661,7 @@ public class DEEIndirect extends DEE {
                     int strj=mutRes2Strand[posj];
                     int strResNumj=strandMut[strj][mutRes2MutIndex[posj]];
 
-                    float minTerm = Float.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) - E(i_t,j_s)  over j_s in R_j
+                    double minTerm = Double.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) - E(i_t,j_s)  over j_s in R_j
 
                     for(int AAs=0; AAs<numAAtypes[posj]; AAs++){
 
@@ -676,7 +676,7 @@ public class DEEIndirect extends DEE {
 
                                 if( ! isPrunedTriple(pos1,r1AA,r1Rot,pos2,r2AA,r2Rot,posj,sAA,sRot) ){
 
-                                    float checkMin = + pairwiseMinEnergyMatrix.getPairwiseE( pos1, r1AA, r1Rot, posj, sAA, sRot )
+                                    double checkMin = + pairwiseMinEnergyMatrix.getPairwiseE( pos1, r1AA, r1Rot, posj, sAA, sRot )
                                             + pairwiseMinEnergyMatrix.getPairwiseE( pos2, r2AA, r2Rot, posj, sAA, sRot )
                                             - pairwiseMinEnergyMatrix.getPairwiseE( pos1, t1AA, t1Rot, posj, sAA, sRot )
                                             - pairwiseMinEnergyMatrix.getPairwiseE( pos2, t2AA, t2Rot, posj, sAA, sRot );
@@ -689,7 +689,7 @@ public class DEEIndirect extends DEE {
                     }
 
 
-                    if(minTerm == Float.POSITIVE_INFINITY)
+                    if(minTerm == Double.POSITIVE_INFINITY)
                         return true;//(r1, r2) can be pruned because it is incompatible with all rotamers at posj
 
                     checkSum += minTerm;
@@ -707,12 +707,12 @@ public class DEEIndirect extends DEE {
         }
 
 
-        private float precomputePairK(int curPos, int curAA, int curRot, int tAA, int tRot){
+        private double precomputePairK(int curPos, int curAA, int curRot, int tAA, int tRot){
             //Computes K(i_r,i_t); i = curPos; curAA & curRot give r; AAt and tRot give t
             //This should only be called if i_r and i_t have not been pruned
 
             //First set K = E(i_r) - E(i_t)
-            float K = pairwiseMinEnergyMatrix.getIntraAndShellE( curPos, curAA, curRot ) 	//intra energy for i_r
+            double K = pairwiseMinEnergyMatrix.getIntraAndShellE( curPos, curAA, curRot ) 	//intra energy for i_r
                         - pairwiseMinEnergyMatrix.getIntraAndShellE( curPos, tAA, tRot );   // i_t now
 
             //Now sum pairwise energy differences within the pruning zone
@@ -723,8 +723,8 @@ public class DEEIndirect extends DEE {
                     int str2=mutRes2Strand[pos2];
                     int strResNum2=strandMut[str2][mutRes2MutIndex[pos2]];
 
-                    float minTerm = Float.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) over j_s in R_(j,i_r)
-                    float maxTerm = Float.NEGATIVE_INFINITY;//This will be the maximum E(i_t,j_s) over j_s in R(j,i_t)
+                    double minTerm = Double.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) over j_s in R_(j,i_r)
+                    double maxTerm = Double.NEGATIVE_INFINITY;//This will be the maximum E(i_t,j_s) over j_s in R(j,i_t)
 
                     for(int AAs=0; AAs<numAAtypes[pos2]; AAs++){
                         int sAA = strandRot[str2].getIndexOfNthAllowable(strResNum2, AAs);
@@ -746,21 +746,21 @@ public class DEEIndirect extends DEE {
                         }
                     }
 
-                    if( minTerm == Float.POSITIVE_INFINITY || maxTerm == Float.NEGATIVE_INFINITY ){
+                    if( minTerm == Double.POSITIVE_INFINITY || maxTerm == Double.NEGATIVE_INFINITY ){
 
-                        if(minTerm == Float.POSITIVE_INFINITY){
+                        if(minTerm == Double.POSITIVE_INFINITY){
                             eliminatedRotAtPos.set(curPos,curAA,curRot,true);//ir can be pruned because it is incompatible with all rotamers at position j (pos2)
                             prunedSinglesCurRun++;
                         }
 
-                        if(maxTerm == Float.NEGATIVE_INFINITY){
+                        if(maxTerm == Double.NEGATIVE_INFINITY){
                             if(!eliminatedRotAtPos.get(curPos,tAA,tRot)){
                                 eliminatedRotAtPos.set(curPos,tAA,tRot,true);//it can be pruned (same argument)
                                 prunedSinglesCurRun++;
                             }
                         }
 
-                        return Float.NaN;//Either way, the pruning makes K(ir,it) useless
+                        return Double.NaN;//Either way, the pruning makes K(ir,it) useless
                     }
 
 
@@ -777,7 +777,7 @@ public class DEEIndirect extends DEE {
                     int str2=mutRes2Strand[pos2];
                     int strResNum2=strandMut[str2][mutRes2MutIndex[pos2]];
 
-                    float minTerm = Float.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) - E(i_t,j_s)  over j_s in R_j
+                    double minTerm = Double.POSITIVE_INFINITY;//This will be the minimum E(i_r,j_s) - E(i_t,j_s)  over j_s in R_j
 
                     for(int AAs=0; AAs<numAAtypes[pos2]; AAs++){
 
@@ -789,7 +789,7 @@ public class DEEIndirect extends DEE {
                             if( ! ( eliminatedRotAtPos.get(pos2, sAA, sRot)
                                     || splitFlags[curPos][curAA][curRot][pos2][sAA][sRot] ) ) {
                                 
-                                float checkMin = pairwiseMinEnergyMatrix.getPairwiseE( curPos, curAA, curRot, pos2, sAA, sRot )
+                                double checkMin = pairwiseMinEnergyMatrix.getPairwiseE( curPos, curAA, curRot, pos2, sAA, sRot )
                                         - pairwiseMinEnergyMatrix.getPairwiseE( curPos, tAA, tRot, pos2, sAA, sRot );
                                 
                                 if ( checkMin < minTerm )
@@ -799,10 +799,10 @@ public class DEEIndirect extends DEE {
                     }
 
 
-                    if(minTerm == Float.POSITIVE_INFINITY){
+                    if(minTerm == Double.POSITIVE_INFINITY){
                         eliminatedRotAtPos.set(curPos, curAA, curRot, true);//ir can be pruned because it is incompatible with all rotamers at position j (pos2)
                         prunedSinglesCurRun++;
-                        return Float.NaN;
+                        return Double.NaN;
                     }
                     
                     K += minTerm;

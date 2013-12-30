@@ -38,7 +38,7 @@
 
 	<signature of Bruce Donald>, Mar 1, 2012
 	Bruce Donald, Professor of Computer Science
-*/
+ */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //	ReducedEnergyMatrix.java
@@ -51,43 +51,143 @@
 //	 ---------   -----------------    ------------------------    ----------------------------
 //	  MAH           Mark A. Hallen	  Duke University               mah43@duke.edu
 ///////////////////////////////////////////////////////////////////////////////////////////////
+
+import java.io.Serializable;
+import java.util.Arrays;
+
 //This class represents the energy bounds for unpruned rotamers in a compact format
 //for use in A*
-public class ReducedEnergyMatrix {
+public class ReducedEnergyMatrix implements Serializable {
 
-    private float RedEmat[][];
+    //Residues, AA types, and normal rotamer indices for each of the reduced rotamer indices
+    int indicesEMatrixPos[];//Numbered among flexible residues
+    int indicesEMatrixAA[];//Numbered among all possible AA types
+    int indicesEMatrixRot[];//Numbered among all RCs for a given residue and AA type
+
+    int shortRedIndices[][][];//Reverse lookup for reduced indices (per residue, as a function of pos, AA, rot)
+
+    int numRes;//number of residues
+
+    private double RedEmat[][];
     // the min energy matrix: the last column contains the intra-energy for each rotamer; the last row
     // contains the shell-residue energy for each rotamer
 
     
-    int numTotalNodes;//the total number of possible rotamers for the given mutation
+    int numRotTotal;//the total number of possible rotamers for the given mutation
 
+    int resOffsets[];//Rotamer/RC index in pairwiseEnergyMatrix at which each new residue starts
 
     
 
-    public ReducedEnergyMatrix(float[][] a){
+    public ReducedEnergyMatrix(int numRotamers, double[][] a, int indPos[], int indAA[], int indRot[]){
+        numRotTotal = numRotamers;
         RedEmat = a;
+        indicesEMatrixPos = indPos;
+        indicesEMatrixAA = indAA;
+        indicesEMatrixRot = indRot;
+
+
+        numRes = indicesEMatrixPos[indicesEMatrixPos.length-1]+1;
+
+        //Calculate resOffsets
+        resOffsets = new int[numRes];
+        int place=0;
+
+        for(int curRes=0; curRes<numRes-1; curRes++){
+            resOffsets[curRes] = place;
+            while( indicesEMatrixPos[place] == curRes ){
+                place++;
+            }
+        }
+        resOffsets[numRes-1] = place;
+
+
+        //Compute index reverse-lookup array
+        //Assuming indicesEMatrixPos, etc. are in ascending order
+        shortRedIndices = new int[numRes][][];
+        for(int res=0; res<numRes; res++){
+            int lastRC;//Last (long reduced index) RC for this residue
+            if(res==numRes-1)
+                lastRC = indicesEMatrixPos.length-1;
+            else
+                lastRC = resOffsets[res+1]-1;
+
+            int lastAA = indicesEMatrixAA[lastRC];//biggest AA index we'll need
+
+            shortRedIndices[res] = new int[lastAA+1][];
+
+            //Count how many rotamers are at each AA type
+            int p=resOffsets[res];
+            for(int curAA=0; curAA<=lastAA; curAA++){
+                lastRC = -1;
+                while(indicesEMatrixAA[p]==curAA && indicesEMatrixPos[p]==res){
+                    lastRC = indicesEMatrixRot[p];//Largest RC number for this AA type
+                    p++;
+                    if(p>=indicesEMatrixPos.length)
+                        break;
+                }
+                shortRedIndices[res][curAA] = new int[lastRC+1];
+                Arrays.fill( shortRedIndices[res][curAA], -1 );//-1 for rotamers that aren't available for our A* tree
+            }
+
+            //Fill in the indices
+            
+            p=resOffsets[res];
+            for(int curAA=0; curAA<=lastAA; curAA++){
+                while( indicesEMatrixAA[p] == curAA && indicesEMatrixPos[p]==res){
+                    shortRedIndices[res][curAA][indicesEMatrixRot[p]] = p-resOffsets[res];
+                    p++;
+                    if(p>=indicesEMatrixPos.length)
+                        break;
+                }
+            }
+        }
     }
 
-    public float getPairwiseE(int index1, int index2){
+    public double getPairwiseE(int index1, int index2){
         return RedEmat[index1][index2];
     }
 
-    public float getIntraE(int index){//the intra-energy is in the last column
-        return RedEmat[index][numTotalNodes];
+    public double getIntraE(int index){//the intra-energy is in the last column
+        return RedEmat[index][numRotTotal];
     }
 
-    public float getShellRotE(int index){
-        float shlRotE = 0.0f;
+    public double getShellRotE(int index){
+        double shlRotE = 0.0f;
         //Skip the first energy which is the intra-rot energy still
-        for(int i=numTotalNodes; i<RedEmat.length;i++){
+        for(int i=numRotTotal; i<RedEmat.length;i++){
                 shlRotE += RedEmat[i][index];
         }
         return shlRotE;
     }
 
-    public float getIntraAndShellE(int index){
+    public double getIntraAndShellE(int index){
         return getIntraE(index) + getShellRotE(index);
+    }
+
+
+            
+
+
+    //Getting energies based on (residue, short reduced index) pairs
+    public double getPairwiseE(int res1, int res2, int RC1, int RC2){
+        int offset1 = resOffsets[res1];
+        int offset2 = resOffsets[res2];
+        return RedEmat[offset1+RC1][offset2+RC2];
+    }
+
+    public double getIntraE(int res, int RC){//the intra-energy is in the last column
+        int offset = resOffsets[res];
+        return RedEmat[offset+RC][numRotTotal];
+    }
+
+    public double getShellRotE(int res, int RC){
+        int offset = resOffsets[res];
+        return getShellRotE(offset+RC);
+    }
+
+    public double getIntraAndShellE(int res, int RC){
+        return getIntraE(res,RC) + getShellRotE(res,RC);
     }
 
 

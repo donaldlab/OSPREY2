@@ -72,7 +72,7 @@ public class OneMutation implements RyanComparable, Comparable
 
 	int mutNum = -1;
 	BigDecimal score = new BigDecimal("0.0");
-	float vol = 0.0f;
+	double vol = 0.0f;
 	String resTypes[] = null;
 	int resMut[] = null;
 	Index3 index[] = null;
