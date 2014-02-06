@@ -364,6 +364,7 @@ public class RotamerLibrary implements Serializable {
 				
 		int aaNum = getAARotamerIndex(tmpName);
 		int atNum[] = new int[4];
+                Arrays.fill(atNum, -1);
 
 		// Find atoms involved in the dihedral
 		for(int q=0;q<localResidue.numberOfAtoms;q++) {
@@ -373,6 +374,13 @@ public class RotamerLibrary implements Serializable {
 				}
 			}
 		}
+                
+                for(int w=0; w<4; w++){
+                    if(atNum[w]==-1)
+                        throw new RuntimeException("ERROR: Couldn't find atom "+
+                                dihedralAtomNames[aaNum][dihedNum][w]+" in residue "+localResidue.fullName);
+                }
+                
 		return(atNum);
 	}
 

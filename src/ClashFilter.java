@@ -176,7 +176,7 @@ public class ClashFilter {
             rots[res] = conf[res];
         }
             
-        CETObjFunction lof = cetm.getObjFunc(AANums,rots,false,false);
+        CETObjFunction lof = cetm.getObjFunc(AANums,rots,false,false,null);
         CCDMinimizer lmin = new CCDMinimizer(lof,false);
         DoubleMatrix1D optDOFs = lmin.minimize();
         

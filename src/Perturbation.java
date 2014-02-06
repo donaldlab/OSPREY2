@@ -122,6 +122,7 @@ public abstract class Perturbation implements Serializable {
 
 
         if( (param == 0) && !(explicitUnperturbed) ){//Unperturbed state requiring no action
+            //(we assume that when this function starts we're in the unperturbed state for this perturbation)
             curParam = 0;
             return true;
         }
@@ -196,6 +197,10 @@ public abstract class Perturbation implements Serializable {
 
         //undoing this perturbation
         if(curParam!=0 || (explicitUnperturbed && oldCoords!=null)){//a motion was performed for this
+            
+            if(this instanceof ProlineFlip)
+                ((ProlineFlip)this).revertPucker();
+            
             for(int b=0;b<resDirectlyAffected.length;b++)
                 restoreResBB( m.residue[resDirectlyAffected[b]], oldCoords.get(b) );
         }
@@ -258,6 +263,9 @@ public abstract class Perturbation implements Serializable {
         if(curParam==0 && (!explicitUnperturbed || oldCoords==null))//Nothing to do
             return;
 
+        if(this instanceof ProlineFlip)
+            ((ProlineFlip)this).revertPucker();
+        
         double[] genChi1 = getGenChi1();
 
         for(int a=0;a<resDirectlyAffected.length;a++)

@@ -85,7 +85,14 @@ public class DegreeOfFreedom implements RyanComparable, Serializable {//DOF for 
     //Type-specific information
     int strResNum;//Strand residue number of affected residue: for AA types and dihedrals
     int dihedNum;//For dihedrals
-    Perturbation pert;//For perturbations
+    
+    //Perturbation pert;//For perturbations
+    //getting rid of pert and using only pertNum so we can use the same DegreeOfFreedom object with multiple molecules
+    //each of the molecules has to be created from the same PDB file and pert file though
+    //need a little info about the perturbation:
+    double pertMeshWidth;
+    boolean isPertParamAngle;
+    
     int pertNum;//index of pert in m.perts
     int rigidDOFNum;//Which rigid-body motion this is (must be in range 0-5)
     int strandNum;//Affected strand: for everything but perturbations 
@@ -286,11 +293,13 @@ public class DegreeOfFreedom implements RyanComparable, Serializable {//DOF for 
         type=PERTURBATION;
         DOFNum = DOFNumber;
         //continuous = pert.
-        pert = pe;
+        //pert = pe;
         pertNum = pertNumber;
 
-
-        Molecule molec = pert.m;
+        pertMeshWidth = pe.getMeshWidth();
+        isPertParamAngle = pe.isParamAngle();
+        
+        Molecule molec = pe.m;
 
         //Make a list of affected residues, and a corresponding list of flexible residue numbers
         ArrayList<Integer> affectedFlexRes = new ArrayList<Integer>();
@@ -313,15 +322,15 @@ public class DegreeOfFreedom implements RyanComparable, Serializable {//DOF for 
             flexResAffected[a] = affectedFlexRes.get(a);
         
 
-        numIntervals = pert.minParams.length;
+        numIntervals = pe.minParams.length;
         intervals = new double[numIntervals][2];
 
         compatibleRCs = new BitSet[numIntervals][numResAffected][];
 
         for(int a=0; a<numIntervals; a++){
             
-            intervals[a][0] = pert.minParams[a];
-            intervals[a][1] = pert.maxParams[a];
+            intervals[a][0] = pe.minParams[a];
+            intervals[a][1] = pe.maxParams[a];
 
             //Fill in RC compatibility
             for(int ares=0; ares<numResAffected; ares++){//Loop through affected residues
@@ -558,7 +567,7 @@ public class DegreeOfFreedom implements RyanComparable, Serializable {//DOF for 
         if(type==SCDIHEDRAL)
             return 1.;
         else if(type==PERTURBATION)
-            return pert.getMeshWidth();
+            return pertMeshWidth;
         else if(type==STRRIGIDMOTION){
             if(rigidDOFNum<3)//translation
                 return 0.1;
@@ -728,7 +737,7 @@ public class DegreeOfFreedom implements RyanComparable, Serializable {//DOF for 
                 return true;
         }
         else if(type==PERTURBATION){
-            if(pert.isParamAngle())
+            if(isPertParamAngle)
                 return true;
         }
         

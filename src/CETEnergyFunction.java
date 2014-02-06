@@ -85,6 +85,8 @@ public class CETEnergyFunction extends EnergyFunction {
     boolean termHasDOF[][];//which terms (numbered as in terms) have which DOFs (numbered as in DOFVals)
     
     
+    Molecule m = null;//molecule (for use with SVE)
+    
     public CETEnergyFunction(DoubleMatrix1D x, int DOFList[], ContETerm termArr[], boolean ime){
 
         DOFVals = x;
@@ -186,7 +188,7 @@ public class CETEnergyFunction extends EnergyFunction {
             
             if(term!=null){
                 DoubleMatrix1D termDOFVals = getTermDOFVals(DOFVals,term.DOFNums,term);
-                double termVal = term.evaluate(termDOFVals,includeMinE);
+                double termVal = term.evaluate(termDOFVals,includeMinE,m);
                 
                                 
                 if(termCoeffs==null){
@@ -249,7 +251,7 @@ public class CETEnergyFunction extends EnergyFunction {
             }
             else {
                 DoubleMatrix1D termDOFVals = getTermDOFVals(DOFVals,term.DOFNums,term);
-                double termVal = term.evaluate(termDOFVals,false);//minE constant terms not included
+                double termVal = term.evaluate(termDOFVals,false,m);//minE constant terms not included
                 
                 
                 maxTerm = Math.max(maxTerm,termVal);

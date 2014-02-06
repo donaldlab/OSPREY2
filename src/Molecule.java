@@ -164,7 +164,7 @@ public class Molecule implements Serializable{
 	}
 
 	// Prints molecule information
-	public String toString(){
+	/*public String toString(){
 		System.out.println("name = "+name );
 		System.out.println("numberOfStrands = "+numberOfStrands );
 		for ( int i = 0; i < numberOfStrands; i++ )
@@ -184,7 +184,7 @@ public class Molecule implements Serializable{
 			System.out.println();
 		}
 		return(new String(""));
-	}
+	}*/
 
 	// This function checks a molecule to make sure that it's legit
 	// There are various types of checking
@@ -2453,7 +2453,7 @@ public class Molecule implements Serializable{
 						atom[j].addBond(i);
 					}
 				}
-				else if (dist < 1.92) {
+				else if (dist < 2) {//previously 1.92...raised because of C-S bonds in 2RIL
 					if (atom[i].elementType.equalsIgnoreCase("S") ||
 							 atom[j].elementType.equalsIgnoreCase("S")) {
 						if(atom[i].strandNumber == atom[j].strandNumber){
@@ -2740,6 +2740,12 @@ public class Molecule implements Serializable{
 
     }
 
+    
+    
+    Residue idealPro = null;//an ideal proline residue, used in proline idealization
+    //it won't be modified
+    //the first time we need it, we can load it from Amber96PolypeptideResidue
+    //and then we cache it because the loading takes a while
 
     public boolean idealizeProRing(Residue res){
         //Make an idealized ring for the given residue, given the current positions of the backbone atoms, CB, and CD
@@ -2757,7 +2763,8 @@ public class Molecule implements Serializable{
 
         RotMatrix r = new RotMatrix();
 
-        Residue idealPro = new Amber96PolyPeptideResidue().getResidue("PRO");
+        if(idealPro==null)
+            idealPro = new Amber96PolyPeptideResidue().getResidue("PRO");
 
         if( ! res.name.equalsIgnoreCase("PRO") ){
             System.err.println("Error: trying to idealize the proline ring on a non-proline");
@@ -3135,7 +3142,9 @@ public class Molecule implements Serializable{
     public void revertPertParamsToCurState(){
         for( Perturbation pert : perts ){
             pert.curParam = ( pert.maxParams[pert.curState] + pert.minParams[pert.curState] )/2;
+            pert.oldCoords = null;//get rid of (possibly minimized) backups.  Can be an issue if try to put discrete perturbations on top of continuous
         }
+        
         //Also, Perturbation.storeResBB and Perturbation.restoreResBB rely on the strand
         //rotation/translation information to tell if the strand has been rotated/translated for minimization
         //so we will reset these to null as well, indicating a return to the original reference frame,

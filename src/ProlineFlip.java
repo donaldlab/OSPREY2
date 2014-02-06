@@ -84,6 +84,9 @@ public class ProlineFlip extends Perturbation {
 
     public boolean doPerturbationMotion(double param){
 
+        if(param==0)//unperturbed and want to stay that way
+            return true;
+        
         Residue res = m.residue[resDirectlyAffected[0]];
 
         if( (res.name.equalsIgnoreCase("PRO")) ){//Apply the desired pucker
@@ -94,7 +97,8 @@ public class ProlineFlip extends Perturbation {
             }
             
             res.pucker = !startingPucker;//Change the pucker
-            return m.idealizeProRing(res);//Idealize the ring with the new pucker
+            m.idealizeProRing(res);//always return true so listed pucker is correct
+            //return m.idealizeProRing(res);//Idealize the ring with the new pucker
         }
         
         
@@ -149,6 +153,17 @@ public class ProlineFlip extends Perturbation {
     @Override
     public boolean isParamAngle(){
         return false;
+    }
+    
+    
+    
+    
+    void revertPucker(){
+        //go back to unperturbed state
+        //this is expected to be followed by re-idealization of the ring, which
+        //will fix the coordinates
+        if(startingPuckerSet)//the perturbation has been performed at some point...might need to change it back
+            m.residue[resDirectlyAffected[0]].pucker = startingPucker;
     }
 
 

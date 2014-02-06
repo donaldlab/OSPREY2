@@ -624,7 +624,7 @@ public class RotamerSearch implements Serializable
 	}
 
 
-        //Load a scaled level-set bound matrix
+        //Load a scaled continuous energy term matrix
         public void loadCETMatrix(String fileName) {
 		try{
 			ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName));
@@ -2257,6 +2257,14 @@ public class RotamerSearch implements Serializable
             
             double baseE = of.getValue(startVec);
             
+            EnergyFunction oldEF = of.efunc;
+            if(es.PBTest||es.quantumTest){//we'll fit to a Poisson-Boltzmann or quantum energy function for test purposes
+                if(es.PBTest)
+                    of.efunc = new PBChangeEFcn(m,str1,strResNum1,str2,strResNum2);
+                else
+                    of.efunc = new QuantumChangeEFcn(of.curDOFVals,res1,res2,oldEF);
+                baseE = 0;
+            }
             
             EPICFitter fitter = new EPICFitter(ccdMin,es,startVec,baseE);
             
@@ -2268,7 +2276,7 @@ public class RotamerSearch implements Serializable
                 //(difference in calculations is efunc.getEnergy(0) vs. getEnergy()--should agree 
                 //for all pairwise or shell E's, unless no flexibility and thus partial energy doesn't include
                 //the residue or pair of interest)
-                if(Math.abs(baseE-curEnergy)>0.001){
+                if( (Math.abs(baseE-curEnergy)>0.001) && !(es.PBTest||es.quantumTest) ){
                     System.out.println("Warning: baseE="+baseE+" but curEnergy="+curEnergy+" in RotamerSearch.compEPICFit!");
                 }
                 
@@ -2276,7 +2284,7 @@ public class RotamerSearch implements Serializable
                 double bestResid = Double.POSITIVE_INFINITY;
                 int bestBound = -1;
                 ArrayList<EPoly> series = new ArrayList<>();//list of fit series
-                                
+                  
                 for( int boundCount=0; bestResid>es.EPICGoalResid && curFitParams!=null; boundCount++ ){
                     
                     System.out.println("FIT NUMBER "+boundCount+": "+curFitParams.getDescription());
@@ -2284,7 +2292,8 @@ public class RotamerSearch implements Serializable
                     double meanResid = fitter.crossValidateSeries(curSeries,curFitParams);
                     series.add(curSeries);
                     
-                    if( curFitParams.order==2 && curFitParams.explicitVDWCutoff==0 )//pure quadratic--to use as template for PCs
+                    if( curFitParams.order==2 && curFitParams.PCOrder<=2 && 
+                            curFitParams.explicitVDWCutoff==0 )//pure quadratic--to use as template for PCs
                         fitter.PCTemplate = curSeries;
                     
                     if(meanResid<bestResid){
@@ -2299,7 +2308,6 @@ public class RotamerSearch implements Serializable
                     System.out.println("Failed to reach goal residual.");
                 }
                 System.out.println("Best residual: "+bestResid+" for bound number "+bestBound);
-
 
 
 
@@ -2346,7 +2354,7 @@ public class RotamerSearch implements Serializable
 
                         for(EPoly b : series){
                             if(b!=null)
-                                System.out.print(b.evaluate(sampAbs,false)+" ");
+                                System.out.print(b.evaluate(sampAbs,false,null)+" ");
                         }
 
                         System.out.println();
@@ -2365,6 +2373,9 @@ public class RotamerSearch implements Serializable
                     cetm.setShellRotE(res1, res1AANum, res1RotNum, bestSer);
             else
                     cetm.setPairwiseE( res1, res1AANum, res1RotNum, res2, res2AANum, res2RotNum, bestSer );    
+            
+            if(es.PBTest||es.quantumTest)//revert to regular energy function
+                ((ContSCObjFunction)ccdMin.objFcn).efunc = oldEF;
         }
         
         
@@ -2385,7 +2396,7 @@ public class RotamerSearch implements Serializable
                     if(dof.type==DegreeOfFreedom.PERTURBATION){
                         if(!dof.isContinuous()){//this is the opposite of the condition for inclusion in a ContSCObjFunction...
                             bestSer.discreteDOFNums.add(dof.DOFNum);
-                            bestSer.discreteDOFVals.add(dof.pert.curParam);
+                            bestSer.discreteDOFVals.add(m.perts[dof.pertNum].curParam);//dof.pert.curParam);
                         }
                     }
                     else if(dof.type==DegreeOfFreedom.MUTATION){
@@ -2876,9 +2887,14 @@ public class RotamerSearch implements Serializable
 		}
                 
                 
-                if(useCCD || es.useEPIC)
+                //if(useCCD || es.useEPIC)
+                //    m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, null);
+                if(es.useEPIC)//For EPIC we will refer to DOFNums in the CETMatrix, so DOFNums must match cetm.DOFList
+                    //if we recomputed m.DOFs here there might be fewer mutations available so the DOFNums might come out different
+                    m.DOFs = cetm.DOFList;
+                else if(useCCD)//we have no cetm and we need a DOF array, but we don't need to match DOFNums, so just recompute the DOF array
                     m.DOFs = DegreeOfFreedom.makeDOFArray(strandRot, strandMut, mutRes2Strand, mutRes2StrandMutIndex, m, null);
-
+                
                 
 		// Setup the residue number to AS number map
 		/*for(int i=0;i<m.strand[sysStrNum].numberOfResidues;i++){
@@ -3257,7 +3273,8 @@ public class RotamerSearch implements Serializable
 		}
 		
 		MSAStar AStarSearch = new MSAStar(treeLevels,numRotForResNonPruned,arpMatrixRed,stericF,
-                        splitFlagsRed,tripleFlagsRed,doPerturbations,es);
+                        splitFlagsRed,tripleFlagsRed,doPerturbations,es,
+                        m,strandRot,mutRes2Strand,strandMut,mutRes2StrandMutIndex);
 
                 if(es.useEPIC){//set up fit series for A* search
                     if(es.gettingLowestBound)//run A* without EPIC
@@ -3346,11 +3363,17 @@ public class RotamerSearch implements Serializable
                                 return;
                             }
 
-                            CETObjFunction lof = cetm.getObjFunc(ASAANums, curStrRotNum, false, false);
+                            
+                            ContSCObjFunction cof = null;
+                            if(es.useSVE)//will need cof to set DOFs for sve
+                                cof = (ContSCObjFunction)ccdMin.objFcn;
+                      
+                            
+                            CETObjFunction lof = cetm.getObjFunc(ASAANums, curStrRotNum, false, false, cof);
                             CCDMinimizer lsbMin = new CCDMinimizer(lof,false);
                             DoubleMatrix1D bestVals = lsbMin.minimize();
                             
-                            
+                           
                             double LSBE = lof.getValue(bestVals);//compute scaled polynomial fits' contribution to energy bound
                             minELowerBound += LSBE;//and this will be used as the energy too!
                             
@@ -3362,6 +3385,13 @@ public class RotamerSearch implements Serializable
                                             +" energy="+minELowerBound+" lowestBound="+es.lowestBound);
                                     System.exit(1);
                                 }
+                            }
+                            
+                            if(es.useSVE){
+                                //cof minimized m...revert to unminimized
+                                m.updateCoordinates();
+                                if(doPerturbations)
+                                    m.revertPertParamsToCurState();
                             }
                         }
 			//double psi = Math.max(initial_q,partial_q);
@@ -4502,7 +4532,8 @@ public class RotamerSearch implements Serializable
 
                 //Set-up the A* search
                 MSAStar MSAStarSearch = new MSAStar(treeLevels,numRotForResNonPruned,arpMatrixRed,null,
-                        splitFlagsRed,tripleFlagsRed,doPerturbations,es);
+                        splitFlagsRed,tripleFlagsRed,doPerturbations,es,
+                        m,strandRot,mutRes2Strand,strandMut,mutRes2StrandMutIndex);
 
 		curConf = new int[treeLevels]; //the rotamer sequence				
 		boolean run1 = true;
@@ -4555,8 +4586,8 @@ public class RotamerSearch implements Serializable
 			//}
 			//curLigAANum = -1;
 			//curLigRotNum = -1;
-			
 
+                        
                         curConf = MSAStarSearch.doAStar(run1, numMut, AAdefault, eliminatedRotAtPosRed, strandRot, strandDefault, numRotForRes, strandMut, false, mutRes2Strand, mutRes2StrandMutIndex); //the current rotamer sequence
                         System.out.println( MSAStarSearch.getNumNodes() + " A* tree nodes");
 
@@ -4594,7 +4625,7 @@ public class RotamerSearch implements Serializable
 			int conf[] = new int[curConf.length]; //the conformation with the actual rotamer numbers
 			conf = getActualConf(curConf,eliminatedRotAtPosRed,treeLevels,numRotForRes,conf);
 			
-			System.out.print("actualConf: ");for(int i=0;i<treeLevels;i++)System.out.print(conf[i]+" ");System.out.println();
+                        System.out.print("actualConf: ");for(int i=0;i<treeLevels;i++)System.out.print(conf[i]+" ");System.out.println();
 			
 			//debugPS.print("actualConf: ");for(int i=0;i<treeLevels;i++)debugPS.print(conf[i]+" ");debugPS.println();debugPS.flush();
 			
@@ -4719,6 +4750,9 @@ public class RotamerSearch implements Serializable
 				
 			double minELowerBound = computeBestRotEnergyBound(/*numTotalRotamers,rotamerIndexOffset*/);
 			
+                        double minTime = 0;
+                        double minTimeEPIC = 0;
+                        
                         if(es.gettingLowestBound){
                             es.lowestBound = minELowerBound;
                             return 0;//not going to use the interval in this case, just wanted the lowestBound
@@ -4737,22 +4771,37 @@ public class RotamerSearch implements Serializable
                         
                         double polyE = 0;//energy, calculated with polynomial fits (0 if not using EPIC)
                         
+                        DoubleMatrix1D EPICMinVals = null;
+                        //DOF values obtained by minimizing EPIC, listed as an input vector for ContSCObjFunction
+                        
                         if(es.useEPIC){
-                             //compute energy from polynomial fits
+                            //compute energy from polynomial fits
 
-                            CETObjFunction lof = cetm.getObjFunc(ASAANums,curStrRotNum,false,false);
+                            ContSCObjFunction cof = null;
+                            
+                            if(es.useSVE)//will need cof to set DOFs for sve
+                                cof = new ContSCObjFunction(m,numberOfStrands,null,strandRot,curAANum,false,null);
+                            
+                            CETObjFunction lof = cetm.getObjFunc(ASAANums,curStrRotNum,false,false,cof);
                             CCDMinimizer lmin = new CCDMinimizer(lof,false);
 
                             DoubleMatrix1D lminVals = lmin.minimize();
-                            double LSBE = lof.getValue( lminVals );//comput scaled level-set bound contribution to energy bound
+                            minTimeEPIC = lmin.minTime;
+                            double LSBE = lof.getValue( lminVals );//comput continuous energy term contribution to energy bound
 
+                            EPICMinVals = DoubleFactory1D.dense.make(lof.sveOFMap.length);
+                            for(int dof=0; dof<lof.sveOFMap.length; dof++)
+                                EPICMinVals.set(dof, lminVals.get(lof.sveOFMap[dof]));
+                            
                             polyE = minELowerBound + LSBE;
                             double noShellShell = polyE - arpMatrix.getShellShellE();
                             System.out.println("CET term: "+LSBE+" Full bound: "+polyE+" Without shell-shell E:"+noShellShell);
 
-                            System.out.print("CET components: ");
-                            lof.printTerms(lminVals);
-                            System.out.println();
+                            if(es.checkEPIC){
+                                System.out.print("CET components: ");
+                                lof.printTerms(lminVals);
+                                System.out.println();
+                            }
 
                             minE = polyE;
                             
@@ -4762,6 +4811,14 @@ public class RotamerSearch implements Serializable
                             //so if minE is more than Ew above the GMEC so far, then we've got all the conformations we need
                             if( minE > (getBestE()+Ew) )
                                 done = true;
+                            
+                            
+                            if(es.useSVE){
+                                //cof minimized m...revert to unminimized state
+                                m.updateCoordinates();
+                                if(doPerturbations)
+                                    m.revertPertParamsToCurState();
+                            }
                         }
                         else if ((minELowerBound>(getBestE()+Ew)) && (!run1)){ //we already have all confs within Ew of the minGMEC
 				done = true;
@@ -4788,8 +4845,10 @@ public class RotamerSearch implements Serializable
 			if(useMinDEEPruningEw){  
                                 if(es.useEPIC){
                                     if(lowestBound+Ival+Ew < minE){
-                                        if(es.checkEPIC)
+                                        if(es.checkEPIC){
                                             EPICFitter.analyzeLSBRecord(CETRecord);
+                                            cetm.analyzeFitTypes();
+                                        }
                                         double IvalTol = RotamerSearch.constRT;//we want to raise the Ival to make sure that
                                         //we have all conformations up to minE, where minE may vary a little bit from run to run
                                         //depending on the EpicFitter samples (hence we need a tolerance).  
@@ -4813,8 +4872,10 @@ public class RotamerSearch implements Serializable
 				
 				MSAStarSearch = null;
 
-                                if(es.checkEPIC)
+                                if(es.checkEPIC){
                                     EPICFitter.analyzeLSBRecord(CETRecord);
+                                    cetm.analyzeFitTypes();
+                                }
 
 				/*CommucObj.ConfInfo tempConf[] = new CommucObj.ConfInfo[numConfsEvaluated];				
 				System.arraycopy(cObj.confSeq,0,tempConf,0,numConfsEvaluated);				
@@ -4868,7 +4929,15 @@ public class RotamerSearch implements Serializable
                                                     unMinE = calcTotalSnapshotEnergy();
                                                     if(useCCD){//The ideal dihedrals are already recorded since we just reinitialized ccdMin
                                                         ccdMin.minimize();
+                                                        minTime = ccdMin.minTime;
                                                         minE = (double)efunc.getEnergy();
+                                                        
+                                                        
+                                                        if(es.useEPIC){
+                                                            ccdMin.objFcn.setDOFs(EPICMinVals);
+                                                            double checkminE = (double)efunc.getEnergy();
+                                                            System.out.println("Full energy function evaluated at EPIC minimum: "+checkminE);
+                                                        }
                                                     }
                                                     else{
                                                         simpMin.minimize(numMinSteps);
@@ -4906,7 +4975,7 @@ public class RotamerSearch implements Serializable
                                     minE -= totEref;
                                     
                                     if(es.checkEPIC)//record different conformational energy estimates
-                                        CETRecord.add(new double[]{minELowerBound,polyE,minE});
+                                        CETRecord.add(new double[]{minELowerBound,polyE,minE,minTime,minTimeEPIC});
                                 }
                                 
                                 

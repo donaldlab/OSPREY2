@@ -140,12 +140,13 @@ public class PerturbationSelector {
             pertCount = m.perts.length;
         }
         else {//generate other perturbations unless only using those in the starting perturbation file
+            //doing discrete then continuous!
             pertsByType[2] = Perturbation.generateAll("SSNE", m, flexMolResNum, 4);
             pertsByType[3] = Perturbation.generateAll("SSCE", m, flexMolResNum, 4);
             pertsByType[4] = Perturbation.generateAll("LOOP CLOSURE ADJUSTMENT", m, flexMolResNum, 3);
-            pertsByType[5] = Perturbation.generateAll("SHEAR", m, flexMolResNum, 4);
-            pertsByType[6] = Perturbation.generateAll("BACKRUB", m, flexMolResNum, 3);
-            pertsByType[7] = ProlineFlip.generateAll(m, sRC);
+            pertsByType[5] = ProlineFlip.generateAll(m, sRC);
+            pertsByType[6] = Perturbation.generateAll("SHEAR", m, flexMolResNum, 4);
+            pertsByType[7] = Perturbation.generateAll("BACKRUB", m, flexMolResNum, 3);
 
             //Copy them all into m.perts
             for(int a=0;a<numPertTypes;a++)

@@ -130,7 +130,7 @@ public class CCDMinimizer {
     double jumpOORNumSteps = 126;//enough to go all the way around
 
 
-
+    double minTime;//time for most recent minimization (ms)
 
     public CCDMinimizer( ObjectiveFunction ofn, boolean useCorners ){
 
@@ -142,6 +142,8 @@ public class CCDMinimizer {
 
     public DoubleMatrix1D minimize() {
 
+        long minStartTime = System.currentTimeMillis();
+        
                 //First figure out the constraints and initial values
         //(since the minimizer might be used for many rotameric states, etc.,
         //this can't be done in the constructor)
@@ -331,6 +333,7 @@ public class CCDMinimizer {
                 rescaleValues();
         }
 
+        minTime = System.currentTimeMillis() - minStartTime;
         return x;
 
     }

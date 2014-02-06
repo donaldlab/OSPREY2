@@ -79,12 +79,13 @@
  */
 
 import java.awt.*;
+import java.io.Serializable;
 
 /**
  * This class contains hard-coded templates for the different amino acid types. These templates are
  * used when performing residue mutations.
  */
-public class Amber96PolyPeptideResidue {
+public class Amber96PolyPeptideResidue implements Serializable {
 	
 	AminoAcidTemplates aat = null;
 	Residue residue;

@@ -83,13 +83,17 @@ public class StrandRotamers implements Serializable {
 	private String curAAType[] = null;    //the three-letter code currently assumed by each residue in the strand
 	protected int curRotNum[] = null;     //the rotamer number currently assumed by each residue in the strand
 	
+        
+        Amber96PolyPeptideResidue ppr;//residues templates (for mutations)
+
+        
 	// Generic constructor
 	StrandRotamers(String rotFilename, Strand s) {
 		
 		rl = new RotamerLibrary(rotFilename,s.isProtein);
 		setupStrand(s);
 		
-		
+		ppr = new Amber96PolyPeptideResidue();
 	}
 	
 	// Generic constructor
@@ -97,6 +101,8 @@ public class StrandRotamers implements Serializable {
 		
 		rl = rotLib;
 		setupStrand(s);
+                
+                ppr = new Amber96PolyPeptideResidue();
 	}
 	
 	public StrandRotamers reInit(Strand s){
@@ -564,7 +570,7 @@ public class StrandRotamers implements Serializable {
 		String savedSegID = localResidue.atom[0].segID;
 
 		// Get the new residue from the templates
- 		Amber96PolyPeptideResidue ppr = new Amber96PolyPeptideResidue();
+ 		//Amber96PolyPeptideResidue ppr = new Amber96PolyPeptideResidue();//caching this: it's the bottleneck for this whole function
 		Residue r = ppr.getResidue(newResType);
 
 		// Residue r = ppr.getResidue("Lala");
@@ -835,7 +841,7 @@ public class StrandRotamers implements Serializable {
                     //This is especially important if we are mutating to proline (some bonds are probably way off length then:
                     //the idealization reconstructs the ideal ring given the backbone, CB, and CD coordinates)
 
-                    m.idealizeResSidechain(localResidue);
+                    m.idealizeResSidechain(localResidue);//this will also enforce the specified pucker (thus matching the original if we mutated away from and then back to proline)
                     int firstAtom = localResidue.atom[0].moleculeAtomNumber;
                     for(int a=0; a<localResidue.numberOfAtoms; a++)
                         m.resolveCoordinates(firstAtom+a);//Copy the idealized coordinates back into the Atom.coord arrays

@@ -344,7 +344,7 @@ public class StrandRCs extends StrandRotamers {
                 int pertState = RCPertStates[resNum][AANum][RCNum];
 
                 boolean outcome = true;
-
+                
                 if(rotNum == -2){//WT rotamer
 
                     Residue localRes=m.strand[strandNumber].residue[resNum];
@@ -412,7 +412,7 @@ public class StrandRCs extends StrandRotamers {
                 curRC[resNum] = RCNum;
 
 		return outcome;
-            }
+        }
 
 
         //Apply a residue perturbation state to the m.actualCoordinates
@@ -458,7 +458,7 @@ public class StrandRCs extends StrandRotamers {
                     if(affectedInd < localRes.affectedPerts.length - 1 )
                         affectedInd++;//The first affected perturbation to reapply
 
-
+                    
                     for(int pertNum=firstPert; pertNum<m.perts.length;pertNum++){//Redoing them in the correct state
                         if(pertNum==localRes.perts[pertInd]){
                             Perturbation pert = m.perts[pertNum];
@@ -475,7 +475,7 @@ public class StrandRCs extends StrandRotamers {
                                 pert.applyPerturbation(0);//Don't waste time applying this invalid perturbation state
                                 pert.curState = 0;//Put it into an unperturbed state
                             }
-
+                            
                             if(pertInd < localRes.perts.length - 1)
                                 pertInd++;
                         }
@@ -489,7 +489,7 @@ public class StrandRCs extends StrandRotamers {
                                     m.perts[pertNum].curState = 0;
                                 }
 
-
+                                
                                 if( affectedInd < localRes.affectedPerts.length - 1 )
                                 affectedInd++;
                             }
@@ -537,7 +537,7 @@ public class StrandRCs extends StrandRotamers {
 
             //Get the actualCoordinates into the Atom.coord arrays to avoid losing perturbation information
             m.resolveCoordinates();
-
+            
             //This uses Atom.coord values but alters both Atom.coord and m.actualCoordinates
             super.changeResidueType(m, resNum, newResType, addHydrogens, connectResidue, useOldBBatoms);
 

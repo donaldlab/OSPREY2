@@ -140,7 +140,8 @@ public class ContSCObjFunction implements ObjectiveFunction, Serializable {
         
     public ContSCObjFunction(Molecule theM, int numStrands, EnergyFunction ef,
 		StrandRotamers strandRotamers[], int curAANum[], boolean doDihedral, boolean[] rotTransStrands){
-
+        //if rotTransStrands is provided as null
+        //it will be set based on the Strand.rotTrans field
 
 
                 // snag the local variables
@@ -303,7 +304,9 @@ public class ContSCObjFunction implements ObjectiveFunction, Serializable {
 
 
                 calcDOFNums(m.DOFs);//Fill in DOFNums, numDOFs, flexToMolResMap
-                setupPartialComp();//Set up partial computations for energy function
+                
+                if(efunc!=null)//this obj function is actually for evaluating energies, not just setting geometry
+                    setupPartialComp();//Set up partial computations for energy function
                 
                 specialBoxConstraints = new double[numDOFs][];//Initialize all special constraints to null
 
@@ -314,6 +317,7 @@ public class ContSCObjFunction implements ObjectiveFunction, Serializable {
 
     private void calcDOFNums(DegreeOfFreedom[] DOFList){
         //Calculate DOFNums, numDOFs, and flexToMolResMap
+        //we list dihedrals first, and this fact is used in setDOF (when calling getDihedStrBasedNum, etc.)
 
         flexToMolResMap = new int[totalFlexRes];
 
@@ -582,7 +586,7 @@ public class ContSCObjFunction implements ObjectiveFunction, Serializable {
                     DOFmax.set(dof, idealDihedVal[str][j] + maxMovement );
                 }
                 else if(curDOF.type == DegreeOfFreedom.PERTURBATION){
-                    Perturbation pert = curDOF.pert;
+                    Perturbation pert = m.perts[curDOF.pertNum];//curDOF.pert;
                     int curState = pert.curState;//Current state of perturbation
                     DOFmin.set(dof, pert.minParams[curState]);
                     DOFmax.set(dof, pert.maxParams[curState]);
@@ -687,13 +691,13 @@ public class ContSCObjFunction implements ObjectiveFunction, Serializable {
             int str = getDihedStrNum(dof);
             int j = getDihedStrBasedNum(dof,str);
 
-            //Set the dihedal value appropriately
+            //Set the dihedral value appropriately
             m.setTorsion(strDihedralAtNums[str][j][0],strDihedralAtNums[str][j][1],
                                 strDihedralAtNums[str][j][2],strDihedralAtNums[str][j][3],
                                 val,strDihedralDistal[str][j],strNumAtomsDistal[str][j],false);
         }
         else if(curDOF.type == DegreeOfFreedom.PERTURBATION){
-            Perturbation pert = curDOF.pert;
+            Perturbation pert = m.perts[curDOF.pertNum];//curDOF.pert;
             pert.changePerturbationParameter((double)val);
         }
         else if(curDOF.type == DegreeOfFreedom.STRRIGIDMOTION){

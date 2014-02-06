@@ -126,6 +126,19 @@ public class MSAStar {
         CETMatrix CETM = null;//the series
         DegreeOfFreedom DOFList[] = null;//the degrees of freedom for the system
 
+        
+        
+        
+        
+        //stuff for SVE minimization
+        //can be null if no EPIC
+        Molecule m;
+        StrandRotamers[] strandRot;
+        int mutRes2Strand[];
+        int strandMut[][];
+        int mutRes2StrandMutIndex[];
+        
+        
 
 	//constructor
 	/*
@@ -134,7 +147,8 @@ public class MSAStar {
 	 * 		reduced size
 	 */
 	MSAStar (int treeLevels, int numRotForRes[], ReducedEnergyMatrix arpMatrixRed, StericCheck stF, boolean[][] spFlags,
-                boolean[][][] tripFlags, boolean doPerts, EPICSettings eset){
+                boolean[][][] tripFlags, boolean doPerts, EPICSettings eset, 
+                Molecule molec, StrandRotamers[] sr, int mr2s[], int sm[][], int mr2smi[]){
 	
                 es = eset;
                 
@@ -168,6 +182,20 @@ public class MSAStar {
                 tripleFlags = tripFlags;
 
                 doPerturbations = doPerts;
+                
+                
+                try{
+                    m = (Molecule)KSParser.deepCopy(molec);
+                    strandRot = (StrandRotamers[])KSParser.deepCopy(sr);
+                    for(Residue r : m.residue)
+                        r.flexible = false;//we'll make only the assigned residues flexible
+                }
+                catch(Exception e){
+                    throw new RuntimeException("ERROR: molecule or StrandRotamers[] deepCopy failed in A* initialization!");
+                }
+                mutRes2Strand = mr2s;
+                strandMut = sm;
+                mutRes2StrandMutIndex = mr2smi;
 	}
 	
 	//Find the lowest-energy conformation and return an array with the number of the corresponding
@@ -218,6 +246,17 @@ public class MSAStar {
                                             //create a queueNode with the corresponding information
                                             newNode = new QueueNode (curNode, 0, curConf, fScore);
 
+                                            
+                                            //DEBUG!!!!  To use when checking minimization for a particular conformation
+                                            /*if(CETM==null)
+                                                CETM = (CETMatrix)KSParser.readObject("1l7mCETM_COM.dat");
+                                            newNode.level = 6;
+                                            newNode.confSoFar = new int[] {0,0,0,0,0,0,0};
+                                            double E = FSTerm(newNode);
+                                            */
+                                            
+                                            
+                                            
                                             //insert in the expansion list
                                             curExpansion.insert(newNode);
                                     //}
@@ -545,8 +584,8 @@ public class MSAStar {
 
 
             //if only want FS terms for full confs
-            //if(dLevel<numTreeLevels-1)
-            //    return 0;
+            if( (expNode.level<numTreeLevels-1) && !(es.minPartialConfs) )
+                return 0;
 
             CETObjFunction of = getNodeObjFunc(expNode);
             
@@ -578,6 +617,15 @@ public class MSAStar {
             
             double LSBE = of.getValue( optDOFs );
             
+            
+            if(es.useSVE){
+                //cof minimized m...revert to unminimized state
+                m.updateCoordinates();
+                if(doPerturbations)
+                    m.revertPertParamsToCurState();
+            }
+            
+            
             //store initial values for next time
             //TEMPORARILY DE-ACTIVATING OPTFSPOINT
             /*if(useHSer){
@@ -596,7 +644,7 @@ public class MSAStar {
             }*/
             
             numFS++;
-            
+
             return LSBE;
         }
 
@@ -626,8 +674,103 @@ public class MSAStar {
             
             }
             
-            return CETM.getObjFunc(AANums,rots,false,false);//This can include h bounds if they're set up
+            //DEBUG!!!!  To use when checking minimization for a particular conformation
+            /*
+            AANums = new int[] {0, 1, 1, 20, 4, 1, 4};
+            rots = new int[] {0, 1, 2, 0, 3, 0, 3};
+            */
+            
+            
+            ContSCObjFunction cof = null;//to set DOFs for SVE
+                        
+            if(es.useSVE){//will need cof to set DOFs for sve
+                //set AA types and rotamers up to now
+                //as in RotamerSearch
+                int curAANum[] = new int[m.numberOfResidues];//current AA number for each residue in the molecule, for cof
+                applyRotamers(dLevel, AANums, rots, curAANum);
+                cof = new ContSCObjFunction(m,m.numberOfStrands,null,strandRot,curAANum,false,getTransRotStrands(dLevel));
+            }
+            
+            
+            
+            return CETM.getObjFunc(AANums,rots,false,false,cof);//This can include h bounds if they're set up
         }
+        
+        
+        boolean[] getTransRotStrands(int dLevel){
+            //when minimizing a partial conformation,
+            //figure out which strands may be allowed to rotate and translate
+            boolean transRotStrands[] = new boolean[m.numberOfStrands];
+            
+            //if a strand can rotate and translate and has either assigned or template residues,
+            //let it rotate and translate
+            
+            for(int str=0; str<m.numberOfStrands; str++){
+                if(m.strand[str].rotTrans){
+                    
+                    if( m.strand[str].numberOfResidues > strandMut[str].length )//strand has template residues
+                        transRotStrands[str] = true;
+                    
+                    for(int i=0; i<=dLevel; i++){
+                        if(str==mutRes2Strand[i])//strand has an assigned residue
+                            transRotStrands[str] = true;
+                    }
+                    
+                }
+            }
+            
+            return transRotStrands;
+        }
+        
+        
+
+        
+        
+        void applyRotamers(int dLevel, int[] AANums, int[] rots, int[] curAANum){
+            //apply AA types and rotamers up to the current level
+            
+            for (int i=0; i<=dLevel; i++){
+                int str = mutRes2Strand[i];
+                int strResNum = strandMut[str][mutRes2StrandMutIndex[i]];
+                
+                //AA types
+                if(m.strand[str].isProtein){
+                    String curAAName = m.strand[str].residue[strResNum].name;
+                    String newAAName = strandRot[str].rl.getAAName(AANums[i]);
+                    if(!curAAName.equalsIgnoreCase(newAAName))
+                        strandRot[str].changeResidueType(m,strResNum,newAAName,true);
+                }
+                
+                //fill in curAANum while we're at it
+                curAANum[m.strand[str].residue[strResNum].moleculeResidueNumber] = AANums[i];
+              
+                //rotamers
+                
+                if(doPerturbations){
+                    //For DEEPer curRot is the the current RC
+                    boolean validRC = ((StrandRCs)strandRot[str]).applyRC(m, strResNum, rots[i]);
+                    if(!validRC)
+                        throw new RuntimeException("Error: invalid RC " + rots[i] + " at residue " + strResNum +
+                                " of strand " + str );
+                }
+                else if (strandRot[str].rl.getNumRotForAAtype(AANums[i])!=0)//not GLY or ALA
+                    strandRot[str].applyRotamer(m, strResNum, rots[i]);
+                
+                //for gly or ala don't need to do anything
+                
+                //also make assigned residues flexible
+                m.strand[str].residue[strResNum].flexible = true;
+            }
+          
+            //make the other residues flexible
+            for(int i=dLevel+1; i<numTreeLevels; i++){
+                int str = mutRes2Strand[i];
+                int strResNum = strandMut[str][mutRes2StrandMutIndex[i]];
+                m.strand[str].residue[strResNum].flexible = false;
+            }
+            
+        }
+        
         
 
 	

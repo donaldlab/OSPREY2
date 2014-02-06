@@ -53,7 +53,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 import cern.colt.matrix.DoubleMatrix1D;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.io.Serializable;
 
 
@@ -63,6 +63,12 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     Molecule m;
     int atomNums[];
     double coeffs[];//the corresponding coefficients
+    
+    //if we need to call this on other molecules, we'll need to call by residue # and atom # within the residue
+    //since we can only count on the residues we call to be of the right AA type
+    int resNums[];//molecule-based residue numbers
+    //int resAtomNums[];//residue-based atom numbers
+    String atomNames[];
     
     //each term corresponds to two indices in atomNums and coeffs:
     //the two moleculeAtomNumbers in atomNums; the r^-12 and then r^-6 coefficients in coeffs 
@@ -116,7 +122,7 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
         
                 
         //now traverse ef to get all VDW terms with specified distance, and their coefficients in ef
-        TreeMap<Integer,double[]> terms = new TreeMap<Integer,double[]>();
+        HashMap<Integer,double[]> terms = new HashMap<Integer,double[]>();
         //will record pair of molecule atom numbers (as (lower number)*m.numberOfAtoms+(higherNumber) )
         //mapped to the pair (coefficient for r^-12, coefficient for r^-6)
         
@@ -126,7 +132,7 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
         else{
             for(DoubleMatrix1D samp : samples){
                 of.setDOFs(samp);
-                TreeMap<Integer,double[]> sampTerms = new TreeMap<Integer,double[]>();
+                HashMap<Integer,double[]> sampTerms = new HashMap<Integer,double[]>();
                 getTerms(ef,sampTerms,1);
                 //merge sampTerms into terms
                 for( int pair : sampTerms.keySet() ){
@@ -141,6 +147,11 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
         numTerms = terms.size();
         atomNums = new int[2*numTerms];
         coeffs = new double[2*numTerms];
+        
+        resNums = new int[2*numTerms];
+        
+        //resAtomNums = new int[2*numTerms];
+        atomNames = new String[2*numTerms];
         
         if(includeElec)
             elecCoeffs = new double[numTerms];
@@ -159,6 +170,9 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
             if(includeElec)
                 elecCoeffs[count] = termCoeffs[2];
             
+            getResBasedNums(2*count);
+            getResBasedNums(2*count+1);
+            
             count++;
         }
         
@@ -166,7 +180,17 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     }
     
     
-    void getTerms(EnergyFunction ef,TreeMap<Integer,double[]> termMap, double coeff){
+    void getResBasedNums(int index){
+        //fill in the residue # and residue-based atom number 
+        //once the molecule-based atom number has been put into atomNums
+        Atom at = m.atom[atomNums[index]];
+        resNums[index] = at.moleculeResidueNumber;
+        //resAtomNums[index] = at.residueAtomNumber;
+        atomNames[index] = at.name;
+    }
+    
+    
+    void getTerms(EnergyFunction ef,HashMap<Integer,double[]> termMap, double coeff){
         //get the appropriate VDW terms from ef, which has coefficient coeff in the energy,
         //and put them in termMap
         
@@ -223,16 +247,45 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     
         for(int t=0; t<numTerms; t++){
             double dist2 = r.normsq( r.subtract( m.getActualCoord(atomNums[2*t]), m.getActualCoord(atomNums[2*t+1]) ) );
-            double dist6 = dist2*dist2*dist2;
-            double dist12 = dist6*dist6;
-            ans += coeffs[2*t]/dist12 - coeffs[2*t+1]/dist6;
+            ans += termValue(t,dist2);
+        }
+        
+        return ans;
+    }
+    
+    
+    private double termValue(int t, double dist2){
+        //evaluate term t, given the squared distance between the atoms involved
+        double dist6 = dist2*dist2*dist2;
+        double dist12 = dist6*dist6;
+        double ans = coeffs[2*t]/dist12 - coeffs[2*t+1]/dist6;
+
+        if(includeElec){
+            if(distDepDielec)
+                ans += elecCoeffs[t]/dist2;
+            else
+                ans += elecCoeffs[t]/Math.sqrt(dist2);
+        }
+        
+        return ans;
+    }
+    
+    
+    public double getEnergy(Molecule otherMolec){
+        //like getEnergy() but evaluate using a different molecule
+        
+        
+        RotMatrix r = new RotMatrix();
+        double ans = 0;
+    
+        for(int t=0; t<numTerms; t++){
+            //int atomNum1 = otherMolec.residue[resNums[2*t]].atom[resAtomNums[2*t]].moleculeAtomNumber;
+            //int atomNum2 = otherMolec.residue[resNums[2*t+1]].atom[resAtomNums[2*t+1]].moleculeAtomNumber;
+            int atomNum1 = otherMolec.residue[resNums[2*t]].getAtomNameToMolnum(atomNames[2*t]);
+            int atomNum2 = otherMolec.residue[resNums[2*t+1]].getAtomNameToMolnum(atomNames[2*t+1]);
             
-            if(includeElec){
-                if(distDepDielec)
-                    ans += elecCoeffs[t]/dist2;
-                else
-                    ans += elecCoeffs[t]/Math.sqrt(dist2);
-            }
+            double dist2 = r.normsq( r.subtract( otherMolec.getActualCoord(atomNum1), otherMolec.getActualCoord(atomNum2) ) );
+            ans += termValue(t,dist2);
         }
         
         return ans;

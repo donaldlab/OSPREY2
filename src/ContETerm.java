@@ -89,7 +89,7 @@ public abstract class ContETerm implements Serializable {
     //pairwise or intra+shell center at DOFs=center)
     //will be included in evaluate if includeMinE is called, else center will evalute to 0
     
-
+    String fitDescription = "N/A";//description of fit used to get this ContETerm, if applicable
     
     public ContETerm(int[] DOFNums, int numDOFs, DoubleMatrix1D DOFmax, DoubleMatrix1D DOFmin, DoubleMatrix1D center, double minE) {
         this.DOFNums = DOFNums;
@@ -101,8 +101,10 @@ public abstract class ContETerm implements Serializable {
     }
 
 
-    public abstract double evaluate(DoubleMatrix1D x, boolean includeMinE);
+    public abstract double evaluate(DoubleMatrix1D x, boolean includeMinE, Molecule m);
     //evaluate at coordinates x, including minE if indicated
+    //m is only used if there is SVE intended to use a shared molec; m should already be set
+    //to match DOF values x, and may be null if not wanted or no SVE
     
 
     DoubleMatrix1D toRelCoords(DoubleMatrix1D x){
@@ -149,7 +151,7 @@ public abstract class ContETerm implements Serializable {
         }
             
         
-        if( evaluate(add(center,scale(relx,top)),false) < r )//at top, r is still not achieved
+        if( evaluate(add(center,scale(relx,top)),false,null) < r )//at top, r is still not achieved
             return Double.NaN;
         
         //now bisect to find the right scaling
@@ -160,7 +162,7 @@ public abstract class ContETerm implements Serializable {
         while ( top-bottom > bisecPrecision ) {
             mid = (top+bottom)/2;
 
-            double val = evaluate(add(center,scale(relx,mid)),false);
+            double val = evaluate(add(center,scale(relx,mid)),false,null);
 
             if( val>=r )
                 top = mid;

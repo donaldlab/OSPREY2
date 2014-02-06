@@ -326,11 +326,12 @@ public class CETMatrix implements Serializable {
     
     
     
-    public CETObjFunction getObjFunc( int[] AAIndices, int rot[], boolean includeMinE, boolean rcs){
+    public CETObjFunction getObjFunc( int[] AAIndices, int rot[], boolean includeMinE, boolean rcs, ContSCObjFunction sveOF){
         //Get the objective function for the given rotamers
         //if !rcs: given as (AA#, rot#) assignments for each residue (can be -1)
         //if rcs: given as RC set assignments, in AStarAxe.RCSets numbering, stored in rot (AAIndices can be null)
-
+        //if sveOF isn't null we can use it to assign DOFs for any SVEs this objective function may call
+        
         ContETerm terms[] = getCETList(AAIndices, rot);
 
         //we'll minimize over all DOFs that the terms depend on
@@ -386,7 +387,7 @@ public class CETMatrix implements Serializable {
 
         DoubleMatrix1D DOFVals = DoubleFactory1D.dense.make(numDOFs);
         CETEnergyFunction ef = new CETEnergyFunction( DOFVals, DOFNums, terms, includeMinE );
-        return new CETObjFunction(DOFNums,constraints,DOFList,ef);
+        return new CETObjFunction(DOFNums,constraints,DOFList,ef,sveOF);
     }
 
     
@@ -526,6 +527,60 @@ public class CETMatrix implements Serializable {
     static double squareDist(DoubleMatrix1D a, DoubleMatrix1D b){
         //square of distance between two vectors
         return a.zDotProduct(a) - 2*a.zDotProduct(b) + b.zDotProduct(b);
+    }
+    
+    
+    
+    void analyzeFitTypes(){
+        //Look at what types of fits are in this matrix
+        System.out.println("Fit types in continuous energy term matrix (# of terms, description): ");
+        
+        HashMap<String,Integer> typeCounts = new HashMap<>();
+        
+        for(ContETerm c[][] : intraAndShellBounds){
+            for(ContETerm cc[] : c){
+                if(cc!=null){
+                    for(ContETerm ccc : cc){
+                        if(ccc!=null)
+                            countFitType(ccc.fitDescription,typeCounts);
+                    }
+                }
+            }
+        }
+        
+        for(int res=0; res<numRes; res++){
+            for(ContETerm cc[][][][] : pairwiseBounds[res]){
+                if(cc!=null){
+                    for(ContETerm ccc[][][] : cc){
+                        if(ccc!=null){
+                            for(int res2=0; res2<res; res2++){
+                                for(ContETerm cccc[] : ccc[res2]){
+                                    if(cccc!=null){
+                                        for(ContETerm ccccc : cccc){
+                                            if(ccccc!=null)
+                                                countFitType(ccccc.fitDescription,typeCounts);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        for(String descr : typeCounts.keySet()){
+            System.out.println(typeCounts.get(descr)+" "+descr);
+        }
+    }
+    
+    
+    void countFitType(String descr, HashMap<String,Integer> typeCounts){
+        //given the description of a fit, add it to the counts of descriptions in typeCounts
+        if(typeCounts.containsKey(descr))
+            typeCounts.put(descr, typeCounts.get(descr)+1);
+        else
+            typeCounts.put(descr, 1);
     }
 
 

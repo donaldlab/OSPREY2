@@ -74,15 +74,23 @@ public class EPICSettings implements Serializable {
 
         
     
-    boolean useSVE = true;
-    boolean usePC = true;
+    boolean useSVE = true;//use sparse VDW energies
+    boolean usePC = true;//use principal-component polynomials
     
+    boolean minPartialConfs = true;//In A*, minimize sum of polynomial fits for partially
+    //defined conformations, as well as for fully enumerated ones.  Increase A* lower bounds
+    //but makes bound calc more time-consuming
     
     
     
     //We'll need to precompute the lowest bound without polynomial fits for A* GMEC calculations
     boolean gettingLowestBound = false;//temporarily set to true for the precomputation 
     double lowestBound;//set during precomputation
+    
+    
+    //testing fitting of advanced energy functions
+    boolean PBTest;//Poisson-Boltzmann
+    boolean quantumTest;//QM
     
     
     public EPICSettings(){
@@ -104,6 +112,10 @@ public class EPICSettings implements Serializable {
         
         useSVE = (new Boolean((String)params.getValue("EPICUSESVE", "true"))).booleanValue();
         usePC = (new Boolean((String)params.getValue("EPICUSEPC","true"))).booleanValue();
+        minPartialConfs = (new Boolean((String)params.getValue("MINPARTIALCONFS","true"))).booleanValue();
+        
+        PBTest = (new Boolean((String)params.getValue("EPICPBTEST","false"))).booleanValue();
+        quantumTest = (new Boolean((String)params.getValue("EPICQUANTUMTEST","false"))).booleanValue();
 
         
         if(EPICThresh2<EPICThresh1){

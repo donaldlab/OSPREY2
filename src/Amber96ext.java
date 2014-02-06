@@ -1468,7 +1468,7 @@ public class Amber96ext implements ForceField, Serializable {
 		for(int i=0; i<m.numberOfAtoms; i++){
 			atom1 = m.atom[i].moleculeAtomNumber;
 
-			if (evalAtom[atom1]) {
+			if (evalAtom[atom1]) { 
 				
 				if (!m.atom[atom1].elementType.equalsIgnoreCase("H")){//solvation terms do not include H
 				

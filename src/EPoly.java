@@ -55,6 +55,7 @@
 import cern.colt.matrix.DoubleFactory1D;
 import cern.colt.matrix.DoubleMatrix1D;
 import cern.jet.math.Functions;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 
 
@@ -85,7 +86,7 @@ public class EPoly extends ContETerm {
     
     
     @Override
-    public double evaluate(DoubleMatrix1D x, boolean includeMinE) {
+    public double evaluate(DoubleMatrix1D x, boolean includeMinE, Molecule m) {
         //evaluate this EPoly as a function of internal coordinates x
          
         DoubleMatrix1D z = toRelCoords(x);
@@ -95,8 +96,61 @@ public class EPoly extends ContETerm {
             serVal += minE;
                  
         if(sve!=null){
-            sveOF.setDOFs(x);
-            return serVal + sve.getEnergy() - baseSVE;
+            if(m==null){//do SVE with the molecule stored in SVE
+                sveOF.setDOFs(x); 
+                return serVal + sve.getEnergy() - baseSVE;
+            }
+            else {//m provided, and should have DOFs already set to x    
+                
+                
+                //DEBUG!!!  To make sure results using an external molecule or the stored molecule agree
+                //use with the corresponding DEBUG block in CETObjFunction.getConstraints
+                /*
+                sveOF.setDOFs(x);
+                double check1 = sve.getEnergy();
+                double check2 = sve.getEnergy(m);
+                
+                if(Math.abs(check1-check2)/Math.max(Math.abs(check1),Math.abs(check2))>0.01 && Math.abs(check1-check2)>0.01){
+s
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    sve.getEnergy();
+                    sve.getEnergy(m);
+                    
+                    
+                    
+                    
+                     //DEBUG!!!
+                    new KSParser().saveMolecule(m, "genm.pdb", 0);
+                    for(int res=0; res<m.numberOfResidues; res++){//can't output sve.m directly but can do this
+                        if(m.residue[res].name.equalsIgnoreCase(sve.m.residue[res].name)){
+                            if(sve.m.residue[res].atom[0]!=null){
+                                for(int at=0; at<m.residue[res].numberOfAtoms; at++){
+                                    m.residue[res].atom[at].coord = sve.m.getActualCoord( sve.m.residue[res].getAtomNameToMolnum(m.residue[res].atom[at].name) );
+                                    m.updateCoordinates(m.residue[res].atom[at]);
+                                }
+                            }
+                        }
+                    }
+                    new KSParser().saveMolecule(m, "termm.pdb", 0);
+                    System.exit(0);
+                }*/
+                
+                //DEBUG!!!!
+                //new KSParser().saveMolecule(m, "checkm"+System.currentTimeMillis()+".pdb",0);
+          
+                return serVal + sve.getEnergy(m) - baseSVE;
+            }
         }
         else 
             return serVal;

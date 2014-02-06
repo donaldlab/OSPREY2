@@ -67,15 +67,30 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
 
     DegreeOfFreedom[] globalDOFList;//The global DOF list that the ef.DOFNums refer to
 
-    
+    //we can do SVE more efficiently if the SVE terms all share a molecule
+    ContSCObjFunction sveOF;//sveOF will set DOFs in this molecule
+    int sveOFMap[];//map from DOFs here to DOFs of sveOF
+    int sveOFMapRev[];//reverse mapping
     
     public CETObjFunction(int[] DOFNums, double[][] constr, DegreeOfFreedom[] allDOFs,
-            CETEnergyFunction efun){
+            CETEnergyFunction efun, ContSCObjFunction sveObjFcn){
+        //sveObjFcn can be null if we aren't doing SVE with molecule sharing
 
         numDOFs = DOFNums.length;
         ef = efun;
         constraints = new DoubleMatrix1D[] { DoubleFactory1D.dense.make(constr[0]), DoubleFactory1D.dense.make(constr[1]) };
         globalDOFList = allDOFs;
+        
+        sveOF = sveObjFcn;
+        if(sveOF!=null){
+            ef.m = sveOF.m;
+            sveOFMap = new int[sveOF.numDOFs];
+            sveOFMapRev = new int[numDOFs];
+            for(int dof=0; dof<sveOF.numDOFs; dof++){                
+                sveOFMap[dof] = ef.revDOFNums.get(sveOF.DOFNums[dof]);
+                sveOFMapRev[sveOFMap[dof]] = dof;
+            }
+        }
     }
 
     public int getNumDOFs(){
@@ -88,34 +103,70 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
         //at this point, if we're doing strand translations and rotations
         //we need to get those back to the "ideal" state for the current rotamer
         //which is stored in the Atom.coord arrays--also with strand trans/rot info
-        for(ContETerm cet : ef.terms){
-            if(cet instanceof EPoly){//not null and may have sve
-                EPoly s = (EPoly)cet;
-                if(s.sve!=null){
-                    s.sveOF.getConstraints();//zeroes the trans/rot info
-                    //adaptation of m.updateCoordinates since sve may have some null atoms to save space
-                    for(Atom a : s.sve.m.atom){
-                        if(a!=null)
-                            s.sve.m.updateCoordinates(a);
+        
+        if(sveOF==null){
+            for(ContETerm cet : ef.terms){
+                if(cet instanceof EPoly){//not null and may have sve
+                    EPoly s = (EPoly)cet;
+                    if(s.sve!=null){
+                        s.sveOF.getConstraints();//zeroes the trans/rot info
+                        //adaptation of m.updateCoordinates since sve may have some null atoms to save space
+                        for(Atom a : s.sve.m.atom){
+                            if(a!=null)
+                                s.sve.m.updateCoordinates(a);
+                        }
                     }
                 }
             }
-	}
+        }
+        else//going to use single sveOF instead of those in the individual terms
+            sveOF.getConstraints();
         
+        
+        
+        
+        //To use if we're comparing SVE.getEnergy with and without argument (called from EPoly.evaluate)
+        //DEBUG!!!
+        /*for(ContETerm cet : ef.terms){
+                if(cet instanceof EPoly){//not null and may have sve
+                    EPoly s = (EPoly)cet;
+                    if(s.sve!=null){
+                        s.sveOF.getConstraints();//zeroes the trans/rot info
+                        //adaptation of m.updateCoordinates since sve may have some null atoms to save space
+                        for(Atom a : s.sve.m.atom){
+                            if(a!=null)
+                                s.sve.m.updateCoordinates(a);
+                        }
+                    }
+                }
+            }*/
+        
+        
+               
         //the actual constraints are stored in the constraints field though
         return constraints;
     }
-
+    
 
     //Set all DOFs to values in x (e.g. in the molecule)
     public void setDOFs(DoubleMatrix1D x){
+        
+        if(sveOF!=null){
+            DoubleMatrix1D z = DoubleFactory1D.dense.make(sveOFMap.length);
+            for(int dof=0; dof<sveOFMap.length; dof++)
+                z.set(dof, x.get(sveOFMap[dof]));
+            
+            sveOF.setDOFs(z);
+        }
+        
+        
         for(int a=0; a<numDOFs; a++)
             ef.DOFVals.set(a, x.get(a));
     }
 
     //Value and gradient at a given point (specified as values for all DOFs)
     public double getValue(DoubleMatrix1D x){
-    
+     
         setDOFs(x);
         double val = ef.getEnergy();
 
@@ -127,6 +178,11 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
 
     //Set just one degree of freedom
     public void setDOF(int dof, double val){
+        
+        if(sveOF!=null){
+            sveOF.setDOF(sveOFMapRev[dof], val);
+        }
+        
         ef.DOFVals.set(dof, val);
     }
 

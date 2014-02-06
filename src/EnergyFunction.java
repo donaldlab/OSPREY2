@@ -86,10 +86,8 @@ public abstract class EnergyFunction implements Serializable {
     //This function is implemented by energy functions that have an Amber96ext, 
     //which override this definition.  Without such an implementation there needs to be an error
     public Amber96ext getAmber96ext(){
-        System.err.println("ERROR: getAmber96ext() operation unsupported for "+
+        throw new RuntimeException("ERROR: getAmber96ext() operation unsupported for "+
                 getClass().getName());
-        System.exit(1);
-        return null;
     }
 
 

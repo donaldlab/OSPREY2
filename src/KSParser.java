@@ -2006,7 +2006,7 @@ public class KSParser
                 }
 
                 //If we get here we have to compute the matrix
-                System.out.println("Precomputed level-set bound matrix not available..");
+                System.out.println("Precomputed continuous energy term matrix not available..");
 
                 long startTime = System.currentTimeMillis();
                 ParamSet newParams = new ParamSet();
@@ -2017,7 +2017,7 @@ public class KSParser
                 handleComputeAllPairwiseRotamerEnergiesMaster( newParams, true, rs.eliminatedRotAtRes, rs.splitFlags, ival, local, rs.es );
 
                 long stopTime = System.currentTimeMillis();
-                System.out.println("Level-set bound matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
+                System.out.println("Continuous energy term matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
                 System.out.println("DONE: Pairwise energy matrix precomputation");
 
                 rs.loadCETMatrix(CETMatrixName);
@@ -2038,7 +2038,7 @@ public class KSParser
                 }
 
                 //If we get here we have to compute the matrix
-                System.out.println("Precomputed unbound level-set bound matrix not available..");
+                System.out.println("Precomputed unbound continuous energy term matrix not available..");
 
                 long startTime = System.currentTimeMillis();
                 ParamSet newParams = new ParamSet();
@@ -2049,7 +2049,7 @@ public class KSParser
                 handleComputeAllPairwiseRotamerEnergiesMaster( newParams, true, rs.eliminatedRotAtRes, rs.splitFlags, ival, local, rs.es );
 
                 long stopTime = System.currentTimeMillis();
-                System.out.println("Level-set bound matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
+                System.out.println("Continuous energy term matrix execution time: "+((stopTime-startTime)/(60.0*1000.0)));
                 System.out.println("DONE: Pairwise energy matrix precomputation");
 
                 rs.loadCETMatrix(CETMatrixName);
@@ -2349,6 +2349,12 @@ public class KSParser
 
                 if(compCETM){
                     outputObject(mutMan.cetm,CETMatrixName);
+                    
+                    if(es.PBTest || es.quantumTest){
+                        //just testing CET matrix computation...analyze and leave
+                        mutMan.cetm.analyzeFitTypes();
+                        System.exit(0);
+                    }
                 }
                 else{
                     outputObject(mutMan.getMinEmatrix().eMatrix,minEMatrixName);
@@ -3594,11 +3600,11 @@ public class KSParser
                             return;
                         }
 
-
+                        
                         if(es.useEPIC)
                             loadCETMatrix(sParams,rs,curStrForMatrix,Ival,false);
 
-                        
+                        long startAStarTime = System.currentTimeMillis();
                         
 			if (!doDACS){ //DACS will not be performed
 				
@@ -3726,10 +3732,11 @@ public class KSParser
 			long stopTime = System.currentTimeMillis();
 			
 			System.out.println("Pruning time: "+((pruneTime-startTime)/(60.0*1000.0)));
+                        //the difference between pruneTime and startAStarTime is CET matrix loading is in between (if applicable)
 			if (genInteractionGraph)
-				System.out.println("Graph generation time: "+((stopTime-pruneTime)/(60.0*1000.0)));
+				System.out.println("Graph generation time: "+((stopTime-startAStarTime)/(60.0*1000.0)));
 			else
-				System.out.println("Enumeration/DACS time: "+((stopTime-pruneTime)/(60.0*1000.0)));
+				System.out.println("Enumeration/DACS time: "+((stopTime-startAStarTime)/(60.0*1000.0)));
 			System.out.println("DEE execution time: "+((stopTime-startTime)/(60.0*1000.0)));
 			System.out.println("DEE done");
 			System.out.println("Total execution time: "+((stopTime-startTimeAll)/(60.0*1000.0)));

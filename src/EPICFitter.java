@@ -171,8 +171,16 @@ public class EPICFitter {
         //according to that here!
         else{//>0            
             //SparseVDWEnergy sve = new SparseVDWEnergy(of.m,of.efunc,explicitVDWCutoff,of.curDOFVals);
+            EnergyFunction ofef = of.efunc;
+            if(ofef instanceof QuantumChangeEFcn)
+                of.efunc = ((QuantumChangeEFcn)ofef).oldEF;//need ef with VDW terms to do SVE
+            
             sve = new SparseVDWEnergy(of,fp.explicitVDWCutoff,sampAbs);
             //((MultiTermEnergyFunction)of.efunc).addTermWithCoeff( sve, -1);
+            
+            //set of back to normal.  MAY WANT TO ADJUST SVE.M TO BE OFEF.M?
+            if(ofef!=of.efunc)
+                of.efunc = ofef;
             
             of.setDOFs(center);
             baseShift = sve.getEnergy();//VDW contribution at startVec
@@ -244,12 +252,23 @@ public class EPICFitter {
         //compress SVE
         if(fp.explicitVDWCutoff>0){
             //store of and m in their current state!
+            //we temporarily remove the biggest things to avoid running out of memory during deepCopy
+            boolean[][] storeBondedMatrix = of.m.bondedMatrix;
+            int[] storeNonBonded = of.m.nonBonded;
+            EnergyFunction storeEF = of.efunc;
+            of.m.bondedMatrix = null;
+            of.m.nonBonded = null;
+            of.efunc = null;
+            
             try{ans.sveOF = (ContSCObjFunction)KSParser.deepCopy(of);}
             catch(Exception e){
                 System.err.println("woah sveOF deepCopy failed");
                 System.err.println(e.getMessage());
             }
-            ans.sveOF.efunc = null;
+            //ans.sveOF.efunc = null;
+            of.m.bondedMatrix = storeBondedMatrix;
+            of.m.nonBonded = storeNonBonded;
+            of.efunc = storeEF;
             
             //won't need these big objects that aren't needed to setDOFs...
             ans.sveOF.de = null;
@@ -285,6 +304,17 @@ public class EPICFitter {
                     }
                 }
             }
+            
+            //since we are only using sve.m for sveOF.setDOFs and sve.getEnergy()
+            //we can delete unnecessary bulky parts of the molecule
+            //sve.m.bondedMatrix = null;//this is now removed before deepCopy
+            //sve.m.nonBonded = null;
+            sve.m.gradient = null;
+            sve.m.connected = null;
+            sve.m.connected12 = null;
+            sve.m.connected13 = null;
+            sve.m.connected14 = null;
+            
             
             sve.DOFVals = ans.sveOF.curDOFVals;
             ans.sve = sve;
@@ -347,6 +377,7 @@ public class EPICFitter {
         }
         */    //DEBUG!!!!
         
+        ans.fitDescription = fp.getDescription();
         
         return ans;
     }
@@ -405,7 +436,7 @@ public class EPICFitter {
 
             double sampBCutoff = es.EPICThresh1;
             double sampBCutoff2 = es.EPICThresh2;
-            double serVal = fit.evaluate(x,false);
+            double serVal = fit.evaluate(x,false,null);
             
             if(fit.sve!=null){
                 fit.sveOF.setDOFs(x);
@@ -480,6 +511,7 @@ public class EPICFitter {
             minMinE = Math.min(minMinE,rec[2]);
 
 
+        double avgTimeRat = 0;
 
         for(double[] rec : LSBRecord){
 
@@ -504,22 +536,26 @@ public class EPICFitter {
                 }
             }
             
-            
+            avgTimeRat += rec[3]/rec[4];
         }
 
         avgSR /= LSBRecord.size();
-
+        avgTimeRat /= LSBRecord.size();
+        
         System.out.println("ANALYSIS OF LSB:");
         System.out.println("Total conformation count: "+LSBRecord.size());
+        System.out.println("Average minimization time ratio (normal/EPIC): "+avgTimeRat);
         System.out.println("Average slack recovery fraction: "+avgSR);
         System.out.println(numOverHundredth+" LSBs > 0.01 over true E; "+numOverTenth+" >0.1 over, "
                 +numOverHalf+" >0.5 over");
-        System.out.println(numEnum+" need to be enumerated based on LSBs");
+        //System.out.println(numEnum+" need to be enumerated based on LSBs");
         System.out.println("Bin_max Bin_count");
         for(int bin=0; bin<binMaxs.length; bin++){
             System.out.println(binMaxs[bin]+" "+binCounts[bin]);
         }
     }
+    
+    
 
 
 
@@ -756,9 +792,6 @@ public class EPICFitter {
             System.out.println("Warning: Maxed out trying to get enough sub-threshold samples!");
     }*/
 
-    
-    boolean useSVE = true;
-    boolean usePC = true;
 
     
     FitParams raiseFitOrder(FitParams fp){
@@ -773,7 +806,7 @@ public class EPICFitter {
         //since these are standard EPIC fits we don't includeConst
         
         
-        if(useSVE){
+        if(es.useSVE){
             //we try SVE fits after non-PC, polynomial-only fits of the same order
             if(fp.explicitVDWCutoff==0 && fp.order>=fp.PCOrder){
                 double cutoff = 3;
@@ -782,9 +815,9 @@ public class EPICFitter {
                 return new FitParams(numDOFs,fp.order,0,fp.order,false,cutoff);
             }
         }
+                
         
-        
-        if(usePC && fp.order<6){
+        if(es.usePC && fp.order<6){
             //after quadratic or quartic fits without principal components (SVE or not)
             //we try first PCFac=0.1 and then 0.01
             if(fp.PCOrder==fp.order)//start PC with 0.1
@@ -807,9 +840,11 @@ public class EPICFitter {
     
     EPoly blank(){
         //return a EPoly on no continuous degrees of freedom
-        return new EPoly(DOFNums,numDOFs,DOFmax,DOFmin,center,minE,null,2);
+        EPoly ans = new EPoly(DOFNums,numDOFs,DOFmax,DOFmin,center,minE,null,2);
         //arbitrarily calling it quadratic (doesn't matter since no variables in polynomial)
+        ans.fitDescription = "No DOFs";
+        return ans;
     }
     
-
+    
 }
