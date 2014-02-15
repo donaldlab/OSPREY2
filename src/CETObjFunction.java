@@ -83,7 +83,18 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
         
         sveOF = sveObjFcn;
         if(sveOF!=null){
-            ef.m = sveOF.m;
+            //ef.m = sveOF.m;
+            ef.useSharedMolec = true;
+            //All sve terms need to share m
+            for(ContETerm cet : ef.terms){
+                if(cet instanceof EPoly){//not null and may have sve
+                    EPoly s = (EPoly)cet;
+                    if(s.sve!=null)
+                        s.sve.initSharedMolec(sveOF.m);
+                }
+            }
+            
+            
             sveOFMap = new int[sveOF.numDOFs];
             sveOFMapRev = new int[numDOFs];
             for(int dof=0; dof<sveOF.numDOFs; dof++){                
@@ -93,6 +104,7 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
         }
     }
 
+    
     public int getNumDOFs(){
         return numDOFs;
     }
@@ -104,45 +116,12 @@ public class CETObjFunction implements ObjectiveFunction, Serializable {
         //we need to get those back to the "ideal" state for the current rotamer
         //which is stored in the Atom.coord arrays--also with strand trans/rot info
         
-        if(sveOF==null){
-            for(ContETerm cet : ef.terms){
-                if(cet instanceof EPoly){//not null and may have sve
-                    EPoly s = (EPoly)cet;
-                    if(s.sve!=null){
-                        s.sveOF.getConstraints();//zeroes the trans/rot info
-                        //adaptation of m.updateCoordinates since sve may have some null atoms to save space
-                        for(Atom a : s.sve.m.atom){
-                            if(a!=null)
-                                s.sve.m.updateCoordinates(a);
-                        }
-                    }
-                }
-            }
-        }
-        else//going to use single sveOF instead of those in the individual terms
+        //we're not going to reset perturbations or trans/rot for sve.m or sveOF after minimization
+        //because they just stay in the same RCs all the time
+        
+        if(sveOF!=null)//going to use single sveOF instead of those in the individual terms
             sveOF.getConstraints();
-        
-        
-        
-        
-        //To use if we're comparing SVE.getEnergy with and without argument (called from EPoly.evaluate)
-        //DEBUG!!!
-        /*for(ContETerm cet : ef.terms){
-                if(cet instanceof EPoly){//not null and may have sve
-                    EPoly s = (EPoly)cet;
-                    if(s.sve!=null){
-                        s.sveOF.getConstraints();//zeroes the trans/rot info
-                        //adaptation of m.updateCoordinates since sve may have some null atoms to save space
-                        for(Atom a : s.sve.m.atom){
-                            if(a!=null)
-                                s.sve.m.updateCoordinates(a);
-                        }
-                    }
-                }
-            }*/
-        
-        
-               
+                       
         //the actual constraints are stored in the constraints field though
         return constraints;
     }

@@ -101,7 +101,7 @@ public abstract class ContETerm implements Serializable {
     }
 
 
-    public abstract double evaluate(DoubleMatrix1D x, boolean includeMinE, Molecule m);
+    public abstract double evaluate(DoubleMatrix1D x, boolean includeMinE, boolean useSharedMolec);
     //evaluate at coordinates x, including minE if indicated
     //m is only used if there is SVE intended to use a shared molec; m should already be set
     //to match DOF values x, and may be null if not wanted or no SVE
@@ -151,7 +151,7 @@ public abstract class ContETerm implements Serializable {
         }
             
         
-        if( evaluate(add(center,scale(relx,top)),false,null) < r )//at top, r is still not achieved
+        if( evaluate(add(center,scale(relx,top)),false,false) < r )//at top, r is still not achieved
             return Double.NaN;
         
         //now bisect to find the right scaling
@@ -162,7 +162,7 @@ public abstract class ContETerm implements Serializable {
         while ( top-bottom > bisecPrecision ) {
             mid = (top+bottom)/2;
 
-            double val = evaluate(add(center,scale(relx,mid)),false,null);
+            double val = evaluate(add(center,scale(relx,mid)),false,false);
 
             if( val>=r )
                 top = mid;

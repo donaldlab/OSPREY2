@@ -2501,16 +2501,16 @@ public class Molecule implements Serializable{
 
 
 
-
+        //  PGC 2013: pdbResNum must be a string if we are to support Kabat format for antibodies.  Therefore we remove this function
 	//Returns the molecule-relative residue number of the residue with PDB residue number pdbResNum
-	public int mapPDBresNumToMolResNum(int pdbResNum){
+	/*public int mapPDBresNumToMolResNum(int pdbResNum){
 		for (int i=0; i<numberOfResidues; i++){
 			if (residue[i].getResNumber()==pdbResNum){
 				return residue[i].moleculeResidueNumber;
 			}
 		}
 		return -1;
-	}
+	}*/
 
         //String-argument version
 	public int mapPDBresNumToMolResNum(String pdbResNum){
@@ -2522,6 +2522,31 @@ public class Molecule implements Serializable{
 		return -1;
 	}
 
+        //Checks if the two residues are backbone-connected (backbone C' of the first residue to backbone N of the second residue);
+                //              resNum1 and resNum2 are strand-relative residue numbers
+                public boolean residuesAreBBbonded(int strNum1, int resNum1, int strNum2, int resNum2){
+
+                        Residue r1 = strand[strNum1].residue[resNum1];
+                        Residue r2 = strand[strNum2].residue[resNum2];
+
+                        Atom Cprev = null;
+                        for (int i=0; i<r1.numberOfAtoms; i++){
+                                if (r1.atom[i].name.equalsIgnoreCase("C")){
+                                        Cprev = r1.atom[i];
+                                        break;
+                                }
+                        }
+
+                        Atom Ncur = null;
+                        for (int i=0; i<r2.numberOfAtoms; i++){
+                                if (r2.atom[i].name.equalsIgnoreCase("N")){
+                                        Ncur = r2.atom[i];
+                                        break;
+                                }
+                        }
+
+                        return Ncur.bondedTo(Cprev.moleculeAtomNumber);
+                }
 	////////////////////////////////////////////////////////////
 	// Used by the SimpleMinimizer
 
@@ -3142,7 +3167,8 @@ public class Molecule implements Serializable{
     public void revertPertParamsToCurState(){
         for( Perturbation pert : perts ){
             pert.curParam = ( pert.maxParams[pert.curState] + pert.minParams[pert.curState] )/2;
-            pert.oldCoords = null;//get rid of (possibly minimized) backups.  Can be an issue if try to put discrete perturbations on top of continuous
+            //pert.oldCoords = null;//get rid of (possibly minimized) backups.  Can be an issue if try to put discrete perturbations on top of continuous
+            //we now check for this problem when reading perturbation files
         }
         
         //Also, Perturbation.storeResBB and Perturbation.restoreResBB rely on the strand

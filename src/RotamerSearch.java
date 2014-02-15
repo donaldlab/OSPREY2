@@ -1438,8 +1438,7 @@ public class RotamerSearch implements Serializable
 				maxEnergy = Math.max(maxEnergy,hE);
 
 				m.updateCoordinates();//restore the actualCoordinates array to the initial values
-                                if(doPerturbations)
-                                    m.revertPertParamsToCurState();
+                                m.revertPertParamsToCurState();
 			}
 			else if (!doBackrubs) { //phi/psi backbone minimization, so only rotate the backbone O and HN		
 				
@@ -2022,8 +2021,7 @@ public class RotamerSearch implements Serializable
 					}					
 															
 					m.updateCoordinates();
-                                        if(doPerturbations)
-                                                m.revertPertParamsToCurState();
+                                        m.revertPertParamsToCurState();
 				}
 				else {
 					if (shellRun) {
@@ -2200,8 +2198,7 @@ public class RotamerSearch implements Serializable
 
 
                 m.updateCoordinates();//restore the actualCoordinates array to the initial values
-                if(doPerturbations)
-                    m.revertPertParamsToCurState();
+                m.revertPertParamsToCurState();
 
 		if (shellRun) {
 			retEMatrixMin.setShellRotE(res1, res1AANum, res1RotNum, minEnergy);
@@ -2288,7 +2285,19 @@ public class RotamerSearch implements Serializable
                 for( int boundCount=0; bestResid>es.EPICGoalResid && curFitParams!=null; boundCount++ ){
                     
                     System.out.println("FIT NUMBER "+boundCount+": "+curFitParams.getDescription());
-                    EPoly curSeries = fitter.doFit(curFitParams);
+                    
+                    EPoly curSeries;
+                    try{
+                        curSeries = fitter.doFit(curFitParams);
+                    }
+                    catch(Exception e){//sometimes singular matrices will arise during fitting
+                        //if so we skip that order.  More SVE etc. might help
+                        System.err.println("Fit failed: "+e.getMessage());
+                        e.printStackTrace();
+                        series.add(null);
+                        continue;
+                    }
+                    
                     double meanResid = fitter.crossValidateSeries(curSeries,curFitParams);
                     series.add(curSeries);
                     
@@ -2354,7 +2363,7 @@ public class RotamerSearch implements Serializable
 
                         for(EPoly b : series){
                             if(b!=null)
-                                System.out.print(b.evaluate(sampAbs,false,null)+" ");
+                                System.out.print(b.evaluate(sampAbs,false,false)+" ");
                         }
 
                         System.out.println();
@@ -3390,8 +3399,7 @@ public class RotamerSearch implements Serializable
                             if(es.useSVE){
                                 //cof minimized m...revert to unminimized
                                 m.updateCoordinates();
-                                if(doPerturbations)
-                                    m.revertPertParamsToCurState();
+                                m.revertPertParamsToCurState();
                             }
                         }
 			//double psi = Math.max(initial_q,partial_q);
@@ -3497,8 +3505,7 @@ public class RotamerSearch implements Serializable
 				}
 				
                                 m.updateCoordinates();
-                                if(doPerturbations)
-                                    m.revertPertParamsToCurState();
+                                m.revertPertParamsToCurState();
 				updateBestE(energy);
 				
 				partial_q = partial_q.add(ef.exp(-((double)(energy)) / constRT));
@@ -4816,8 +4823,7 @@ public class RotamerSearch implements Serializable
                             if(es.useSVE){
                                 //cof minimized m...revert to unminimized state
                                 m.updateCoordinates();
-                                if(doPerturbations)
-                                    m.revertPertParamsToCurState();
+                                m.revertPertParamsToCurState();
                             }
                         }
                         else if ((minELowerBound>(getBestE()+Ew)) && (!run1)){ //we already have all confs within Ew of the minGMEC
@@ -4956,8 +4962,7 @@ public class RotamerSearch implements Serializable
                                                     minE = calcTotalSnapshotEnergy();
                                             }
                                                 m.updateCoordinates();
-                                                if(doPerturbations)
-                                                    m.revertPertParamsToCurState();
+                                                m.revertPertParamsToCurState();
                                     }
                                     else if (computeEVEnergy){ //no minimization, so traditional DEE
                                             minE = calcTotalSnapshotEnergy(); //the sum of the precomputed energy terms
@@ -5610,7 +5615,7 @@ public class RotamerSearch implements Serializable
 		for (int i=0; i<numMutRes; i++){
 			int str = mutRes2Strand[i];
 			int strResNum = strandMut[str][mutRes2StrandMutIndex[i]];
-			if(!m.strand[str].isProtein){
+			if(m.strand[str].isProtein){
 				for (int j=0; j<strandRot[str].getNumAllowable(strResNum); j++){
 					int aaInd = strandRot[str].getIndexOfNthAllowable(strResNum,j);
 					int numRot = getNumRot(str, strResNum, aaInd);
@@ -5648,8 +5653,7 @@ public class RotamerSearch implements Serializable
 			}
 		}
 		m.saveMolecule(filename, energy);
-                if(doPerturbations)
-                    m.revertPertParamsToCurState();
+                m.revertPertParamsToCurState();
                 m.restoreAtomCoord();
                 m.updateCoordinates();
                 

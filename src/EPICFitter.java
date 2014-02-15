@@ -436,7 +436,7 @@ public class EPICFitter {
 
             double sampBCutoff = es.EPICThresh1;
             double sampBCutoff2 = es.EPICThresh2;
-            double serVal = fit.evaluate(x,false,null);
+            double serVal = fit.evaluate(x,false,false);
             
             if(fit.sve!=null){
                 fit.sveOF.setDOFs(x);

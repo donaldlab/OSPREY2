@@ -86,7 +86,7 @@ public class EPoly extends ContETerm {
     
     
     @Override
-    public double evaluate(DoubleMatrix1D x, boolean includeMinE, Molecule m) {
+    public double evaluate(DoubleMatrix1D x, boolean includeMinE, boolean useSharedMolec) {
         //evaluate this EPoly as a function of internal coordinates x
          
         DoubleMatrix1D z = toRelCoords(x);
@@ -96,7 +96,7 @@ public class EPoly extends ContETerm {
             serVal += minE;
                  
         if(sve!=null){
-            if(m==null){//do SVE with the molecule stored in SVE
+            if(!useSharedMolec){//do SVE with the molecule stored in SVE
                 sveOF.setDOFs(x); 
                 return serVal + sve.getEnergy() - baseSVE;
             }
@@ -149,7 +149,7 @@ s
                 //DEBUG!!!!
                 //new KSParser().saveMolecule(m, "checkm"+System.currentTimeMillis()+".pdb",0);
           
-                return serVal + sve.getEnergy(m) - baseSVE;
+                return serVal + sve.getEnergySharedMolec() - baseSVE;
             }
         }
         else 

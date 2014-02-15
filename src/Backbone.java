@@ -79,12 +79,15 @@ public class Backbone implements Serializable {
 	public double getFiPsi(Molecule m, int strandNum, int resNum, int angleType){
 		
 		if ((angleType==0)
-				&&((resNum==0)||(m.strand[strandNum].residue[resNum-1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()-1))) { //phi angle needed and (N-terminus or no prev residue), so no phi angle
-			return 0.0;
+				&&((resNum==0)||(m.residuesAreBBbonded(strandNum, resNum-1, strandNum, resNum)))) {
+                    //phi angle needed and (N-terminus or no prev residue), so no phi angle			
+                    return 0.0;
 		}
 		else if ((angleType==1)
-				&&((resNum==(m.strand[strandNum].numberOfResidues-1))||(m.strand[strandNum].residue[resNum+1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()+1))) { //psi angle needed and (C-terminus or no next residue), so no psi angle
-			return 0.0;
+				&&((resNum==(m.strand[strandNum].numberOfResidues-1))
+                                ||(m.residuesAreBBbonded(strandNum, resNum, strandNum, resNum+1)))) {
+                    //psi angle needed and (C-terminus or no next residue), so no psi angle			
+                    return 0.0;
 		}
 		else {
 		
@@ -135,13 +138,17 @@ public class Backbone implements Serializable {
 	public void applyFiPsi(Molecule m, int strandNum, int resNum, double alpha, int angleType){
 		
 		if ((angleType==0)
-				&&((resNum==0)||(m.strand[strandNum].residue[resNum-1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()-1))) { //phi angle needed and (N-terminus or no prev residue), so no phi angle
-			System.out.println("Warning: invalid phi angle.");
+				&&((resNum==0)
+                                ||(m.residuesAreBBbonded(strandNum, resNum-1, strandNum, resNum)))) { 
+                        //phi angle needed and (N-terminus or no prev residue), so no phi angle                        
+                        System.out.println("Warning: invalid phi angle.");
 			return;
 		}
 		else if ((angleType==1)
-				&&((resNum==(m.strand[strandNum].numberOfResidues-1))||(m.strand[strandNum].residue[resNum+1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()+1))) { //psi angle needed and (C-terminus or no next residue), so no psi angle
-			System.out.println("Warning: invalid psi angle.");
+				&&((resNum==(m.strand[strandNum].numberOfResidues-1))
+                                ||(m.residuesAreBBbonded(strandNum, resNum, strandNum, resNum+1)))) { 
+                        //psi angle needed and (C-terminus or no next residue), so no psi angle			
+                        System.out.println("Warning: invalid psi angle.");
 			return;
 		}
 		else {

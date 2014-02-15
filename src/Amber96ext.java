@@ -204,11 +204,13 @@ public class Amber96ext implements ForceField, Serializable {
 		}
 		catch (FileNotFoundException e) {
 			System.out.println("ERROR: Template File Not Found: "+e);
+                        e.printStackTrace();
 			System.exit(0);
 		}
 		catch ( Exception e ){
 			System.out.println("ERROR: An error occurred while reading a template file: "+e);
-			System.exit(0);
+			e.printStackTrace();
+                        System.exit(0);
 		}
 		
 		// Read in AMBER forcefield parameters
@@ -222,10 +224,12 @@ public class Amber96ext implements ForceField, Serializable {
 		}
 		catch (IOException e) {
 			System.out.println("ERROR: An error occurred while reading file: "+e);
+                        e.printStackTrace();
 			System.exit(0);
 		}
 		catch ( Exception e ){
 			System.out.println("ERROR: An error occurred while reading file: "+e);
+                        e.printStackTrace();
 			System.exit(0);
 		}
 		
@@ -236,6 +240,7 @@ public class Amber96ext implements ForceField, Serializable {
 		}
 		catch ( Exception e ){
 			System.out.println("ERROR: An error occurred while reading file: "+e);
+                        e.printStackTrace();
 			System.exit(0);
 		}
 		

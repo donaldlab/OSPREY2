@@ -70,6 +70,12 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     //int resAtomNums[];//residue-based atom numbers
     String atomNames[];
     
+    //During CETObjFunction minimization it's more efficient to use a shared molecules
+    //the sharedAtomNums will refer to this molecule and will be oomputed at the beginning of minimization
+    Molecule sharedMolec;
+    int sharedAtomNums[];
+    
+    
     //each term corresponds to two indices in atomNums and coeffs:
     //the two moleculeAtomNumbers in atomNums; the r^-12 and then r^-6 coefficients in coeffs 
     int numTerms;
@@ -254,6 +260,21 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     }
     
     
+    public double getEnergySharedMolec(){
+        //get energy using the shared molecule
+        
+        RotMatrix r = new RotMatrix();
+        double ans = 0;
+    
+        for(int t=0; t<numTerms; t++){
+            double dist2 = r.normsq( r.subtract( sharedMolec.getActualCoord(sharedAtomNums[2*t]), sharedMolec.getActualCoord(sharedAtomNums[2*t+1]) ) );
+            ans += termValue(t,dist2);
+        }
+        
+        return ans;
+    }
+    
+    
     private double termValue(int t, double dist2){
         //evaluate term t, given the squared distance between the atoms involved
         double dist6 = dist2*dist2*dist2;
@@ -271,24 +292,12 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     }
     
     
-    public double getEnergy(Molecule otherMolec){
-        //like getEnergy() but evaluate using a different molecule
-        
-        
-        RotMatrix r = new RotMatrix();
-        double ans = 0;
     
-        for(int t=0; t<numTerms; t++){
-            //int atomNum1 = otherMolec.residue[resNums[2*t]].atom[resAtomNums[2*t]].moleculeAtomNumber;
-            //int atomNum2 = otherMolec.residue[resNums[2*t+1]].atom[resAtomNums[2*t+1]].moleculeAtomNumber;
-            int atomNum1 = otherMolec.residue[resNums[2*t]].getAtomNameToMolnum(atomNames[2*t]);
-            int atomNum2 = otherMolec.residue[resNums[2*t+1]].getAtomNameToMolnum(atomNames[2*t+1]);
-            
-            double dist2 = r.normsq( r.subtract( otherMolec.getActualCoord(atomNum1), otherMolec.getActualCoord(atomNum2) ) );
-            ans += termValue(t,dist2);
-        }
-        
-        return ans;
+    void initSharedMolec(Molecule m2){
+        sharedMolec = m2;
+        sharedAtomNums = new int[2*numTerms];
+        for(int a=0; a<2*numTerms; a++)
+            sharedAtomNums[a] = sharedMolec.residue[resNums[a]].getAtomNameToMolnum(atomNames[a]);
     }
 
     

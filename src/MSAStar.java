@@ -120,6 +120,8 @@ public class MSAStar {
         //Use DEEPer
         boolean doPerturbations;
 
+        MSMPLP MPLPheuristic;
+
         EPICSettings es;
         
         //if using EPIC we'll need these:
@@ -176,6 +178,12 @@ public class MSAStar {
 			curConf[i] = -1;
 		}
 		
+                
+                // PGC 2013: MSMPLP is a much more accurate heuristic for the A* search
+                if (EnvironmentVars.useMPLP){
+                        MPLPheuristic = new MSMPLP(treeLevels,numRotForRes,arpMatrixRed);
+                }
+                
 		stericF = stF;
 
                 splitFlags = spFlags;
@@ -238,10 +246,16 @@ public class MSAStar {
 
                                             curConf[0] = curNode;//this is the only node in the current conformation
 
+                                            
                                             //compute f for the current node
-                                            gScore = gCompute (curLevelNum, curConf);
-                                            hScore = hCompute (curLevelNum, curConf);
-                                            fScore = gScore + hScore;
+                                            if(!EnvironmentVars.useMPLP){
+                                                    gScore = gCompute (curLevelNum, curConf);
+                                                    hScore = hCompute (curLevelNum, curConf);
+                                                    fScore = gScore + hScore;
+                                            }
+                                            else{
+                                                    fScore = MPLPheuristic.optimizeEMPLP(curConf, EnvironmentVars.MPLP_iterations);
+                                            }
 
                                             //create a queueNode with the corresponding information
                                             newNode = new QueueNode (curNode, 0, curConf, fScore);
@@ -356,10 +370,17 @@ public class MSAStar {
 
                                                             curConf[curLevelNum] = curNode;//add curNode to the conformation so far
 
+                                                            
+                                                            
                                                             //compute f for the current node
-                                                            gScore = gCompute (curLevelNum, curConf);
-                                                            hScore = hCompute (curLevelNum, curConf);
-                                                            fScore = gScore + hScore;
+                                                            if(!EnvironmentVars.useMPLP){
+                                                                    gScore = gCompute (curLevelNum, curConf);
+                                                                    hScore = hCompute (curLevelNum, curConf);
+                                                                    fScore = gScore + hScore;
+                                                            }
+                                                            else{
+                                                                    fScore = MPLPheuristic.optimizeEMPLP(curConf, EnvironmentVars.MPLP_iterations);
+                                                            }
 
                                                             //create a queueNode with the corresponding information
                                                             newNode = new QueueNode (curNode, curLevelNum, curConf, fScore);
@@ -621,8 +642,7 @@ public class MSAStar {
             if(es.useSVE){
                 //cof minimized m...revert to unminimized state
                 m.updateCoordinates();
-                if(doPerturbations)
-                    m.revertPertParamsToCurState();
+                m.revertPertParamsToCurState();
             }
             
             

@@ -218,6 +218,25 @@ public class PertFileHandler {
             e.printStackTrace();
             System.exit(1);//Problems setting up the perturbations will mess up the whole run so quit
         }
+        
+        
+        //The scheme where StrandRCs.applyRC applies the mean pert parameter for an RC to both actualCoordinates and Atom.coord
+        //messes up if there are continuous perturbations c applied before perturbations p with perturbed states
+        //because when we try to change the parameter of p after applyRC, Perturbation.undo() will go back to some 
+        //minimized state of c
+        //this problem shouldn't arise with the current perturbations (e.g. from PerturbationSelector)
+        //because shears and backrubs are best handled with just 1 minimizable, unperturbed state
+        //but we check here
+        boolean afterCont = false;//we are after a continuous perturbation
+        for(int p=0; p<m.perts.length; p++){
+            if(afterCont && m.perts[p].minParams.length>1)
+                throw new RuntimeException("ERROR: Perturbations with perturbed states can't follow continuous perturbations");
+            for(int s=0; s<m.perts[p].minParams.length; s++){
+                if(m.perts[p].minParams[s]!=m.perts[p].maxParams[s])
+                    afterCont = true;
+            }
+        }
+        
     }
 
 

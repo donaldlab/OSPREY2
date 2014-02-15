@@ -223,9 +223,10 @@ public class PartialStructureSwitch extends Perturbation {
 
                 int resAffected2[] = new int[resDirectlyAffected.length];//Residues affected in the alternate structure
 
-                for(int a=0; a<resDirectlyAffected.length; a++)
-                    resAffected2[a] = m2.mapPDBresNumToMolResNum( Integer.valueOf(st.nextToken()) );
-
+                for(int a=0; a<resDirectlyAffected.length; a++){ // PGC 2013: pdb numbers are always strings now.
+                    resAffected2[a] = m2.mapPDBresNumToMolResNum( st.nextToken() );
+                }
+                
                 for( int sec=0; sec<numSections; sec++ ){
 
                     ChainSection cs = new ChainSection();

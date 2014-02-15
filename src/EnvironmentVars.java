@@ -78,6 +78,13 @@ public class EnvironmentVars {
 
         public static boolean autoFix = true;//Should structures being read in be autofixed?
 	
+        
+        
+        public static boolean useMPLP = false;
+        public static int MPLP_iterations = 100;
+        
+        
+        
 	public static String getDataDir() {
 		return dataDir;
 	}

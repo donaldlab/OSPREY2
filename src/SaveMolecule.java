@@ -163,16 +163,24 @@ class SaveMolecule {
 					for(int q=tmpStg.length();q<3;q++)  // add whitespace on left
 						tmpChr[19-q]=' ';
 				}
-				tmpInt = new Integer(residue.getResNumber());
-				tmpStg = tmpInt.toString();
+                                tmpStg = residue.getResNumber();
 				tmpLen = 4-tmpStg.length();
+                                String kabatL = " ";
+                                // PGC 2013: support for Kabat formatting: if tmpStg ends in a letter, then this letter will go into field 26.
+                                if (tmpStg.matches(".*[A-Z]$")){
+                                        kabatL = tmpStg.substring(tmpStg.length()-1, tmpStg.length() );
+                                        tmpStg = tmpStg.substring(0, tmpStg.length()-1);
+                                        tmpLen = 4-tmpStg.length();
+                                }
+
 				if (tmpLen <= 0)
-					tmpStg.getChars(0,4,tmpChr,22);
+                                        tmpStg.getChars(0,4,tmpChr,22);
 				else {
 					// from 22-25 (zero based)
 					tmpStg.getChars(0,tmpStg.length(),tmpChr,22+tmpLen);
 					for(int q=tmpStg.length();q<4;q++)  // add whitespace on left
 						tmpChr[25-q]=' ';
+                                        kabatL.getChars(0, 1, tmpChr, 26);
 				}
 
 				// If the residue number decreases in the middle
@@ -180,7 +188,7 @@ class SaveMolecule {
 //				if(tmpInt.intValue() < prevResNum){
 //					tmpChr[21] = 'R';
 //				}
-				prevResNum = tmpInt.intValue();
+				//prevResNum = tmpInt.intValue();
 				
 				for(int k=0; k<residue.numberOfAtoms; k++){
 					Atom atom = residue.atom[k];

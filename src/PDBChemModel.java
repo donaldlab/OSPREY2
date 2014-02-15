@@ -154,7 +154,8 @@ class PDBChemModel {
 	   			atomName = atomName.trim();
 	   			residueName = curLine.substring(17,20);  // Snag short residue name
 	   			residueName = residueName.trim();
-	   			fullResidueName = curLine.substring(17,26);  // Snag full residue atom name
+                                // PGC 2013: add support for Kabat format
+                                fullResidueName = curLine.substring(17,27);  // Snag full residue atom name
 	   			fullResidueName = fullResidueName.trim();
 
 				if (!(fullResidueName.equals(lastResidueName))) {
@@ -327,14 +328,14 @@ class PDBChemModel {
 
                     if( curSecondaryStruct == Residue.LOOP ){//Check for starting of a helix or sheet
                         if( curHelix < helixStarts.size() ){//If there are more helices to look for
-                            if( (res.getResNumber() >= helixStarts.get(curHelix) )
+                            if( Residue.lessThanOrEqualInPDBChain(String.valueOf(helixStarts.get(curHelix)) , res)
                                     && ( strandList[res.strandNumber] == helixStrands.get(curHelix)) ){//If we reached the start of the next one
                                 curSecondaryStruct = Residue.HELIX;
                                 continue;
                             }
                         }
                         if( curSheet < sheetStarts.size() ){
-                            if( (res.getResNumber() >= sheetStarts.get(curSheet) )
+                            if( Residue.lessThanOrEqualInPDBChain(String.valueOf(sheetStarts.get(curSheet)) , res)
                                     && ( strandList[res.strandNumber] == sheetStrands.get(curSheet)) ){
                                 curSecondaryStruct = Residue.SHEET;
                                 continue;
@@ -343,7 +344,7 @@ class PDBChemModel {
                     }
 
                     else if(curSecondaryStruct == Residue.HELIX ){//Check for the end of a helix
-                        if( ( res.getResNumber() > helixEnds.get(curHelix) ) ||
+                        if( Residue.lessThanInPDBChain(String.valueOf(helixEnds.get(curHelix)) , res)  ||
                                 ( strandList[res.strandNumber] != helixStrands.get(curHelix)) ){
                             curSecondaryStruct = Residue.LOOP;
                             curHelix++;
@@ -352,7 +353,7 @@ class PDBChemModel {
                     }
 
                     else if(curSecondaryStruct == Residue.SHEET ){//Check for the end of a sheet
-                        if( ( res.getResNumber() > sheetEnds.get(curSheet) ) ||
+                        if( Residue.lessThanInPDBChain(String.valueOf(sheetEnds.get(curSheet)) , res) ||
                                 ( strandList[res.strandNumber] != sheetStrands.get(curSheet)) ){
                             curSecondaryStruct = Residue.LOOP;
                             curSheet++;

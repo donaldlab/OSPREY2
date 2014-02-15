@@ -69,6 +69,14 @@ import java.util.*;
  */
 public class StrandRotamers implements Serializable {
 	
+    // indices for backbone atoms
+         static final int N = 0;
+     static final int CA = 1;
+     static final int C = 2;
+     static final int O = 3;
+     static final int H = 4;
+     static final int CB = 5;
+    
 	// If the debug flag is set to true then additional debug statements are
 	//  printed to standard out.
 	public static final boolean debug = false;
@@ -728,12 +736,12 @@ public class StrandRotamers implements Serializable {
 
 		if ((resNum+1) < m.strand[strandNumber].numberOfResidues) {
 			if (connectResidue)
-				connectNextResidue = (localResidue.getResNumber() + 1 == m.strand[strandNumber].residue[resNum+1].getResNumber());
+				connectNextResidue = m.residuesAreBBbonded(strandNumber, resNum, strandNumber, resNum+1);
 		}
 		if (resNum > 0) {
 			if (connectResidue)
-				connectLastResidue = (localResidue.getResNumber() - 1 == m.strand[strandNumber].residue[resNum-1].getResNumber());
-			if (connectLastResidue) {
+                                connectLastResidue = m.residuesAreBBbonded(strandNumber, resNum-1, strandNumber, resNum);			
+                        if (connectLastResidue) {
 				for(int q=0;q<m.strand[strandNumber].residue[resNum-1].numberOfAtoms;q++) {
 					if (m.strand[strandNumber].residue[resNum-1].atom[q].name.equalsIgnoreCase("C"))
 						lastResidueC = m.strand[strandNumber].residue[resNum-1].atom[q].moleculeAtomNumber;
@@ -861,27 +869,28 @@ public class StrandRotamers implements Serializable {
 	}*/
 	
 	//Returns a handle on the backbone N, CA, C, O, H, and CB atoms for residue res
-	private Atom [] getBBatoms(Residue res){
-		
-		Atom at[] = new Atom[6];
-		
-		for(int q=0;q<res.numberOfAtoms;q++) {
-			if (res.atom[q].name.equalsIgnoreCase("N"))
-				at[0] = res.atom[q];
-			else if (res.atom[q].name.equalsIgnoreCase("CA"))
-				at[1] = res.atom[q];
-			else if (res.atom[q].name.equalsIgnoreCase("C"))
-				at[2] = res.atom[q];
-			else if (res.atom[q].name.equalsIgnoreCase("O")||res.atom[q].name.equalsIgnoreCase("O1"))
-				at[3] = res.atom[q];
-			else if ( res.atom[q].name.equalsIgnoreCase("H") || ( res.atom[q].name.equalsIgnoreCase("CD") && res.name.equalsIgnoreCase("PRO") ) )
-				at[4] = res.atom[q];
-			else if (res.atom[q].name.equalsIgnoreCase("CB"))
-				at[5] = res.atom[q];
-		}
-		
-		return at;
-	}
+	private static Atom [] getBBatoms(Residue res){
+
+                Atom at[] = new Atom[6];
+
+                for(int q=0;q<res.numberOfAtoms;q++) {
+                        if (res.atom[q].name.equalsIgnoreCase("N"))
+                                at[N] = res.atom[q];
+                        else if (res.atom[q].name.equalsIgnoreCase("CA"))
+                                at[CA] = res.atom[q];
+                        else if (res.atom[q].name.equalsIgnoreCase("C"))
+                                at[C] = res.atom[q];
+                        else if (res.atom[q].name.equalsIgnoreCase("O")||res.atom[q].name.equalsIgnoreCase("O1"))
+                                at[O] = res.atom[q];
+                        else if ( res.atom[q].name.equalsIgnoreCase("H") || ( res.atom[q].name.equalsIgnoreCase("CD") && res.name.equalsIgnoreCase("PRO") ) )
+                                at[H] = res.atom[q];
+                        else if (res.atom[q].name.equalsIgnoreCase("CB"))
+                                at[CB] = res.atom[q];
+                }
+
+                return at;
+        }
+
 	
 	//Sets the coordinates of atom toAt to be the same as the coordinates of atom fromAt
 	private void setAtomCoord(Atom toAt, Atom fromAt){

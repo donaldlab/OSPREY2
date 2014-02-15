@@ -311,9 +311,9 @@ public class Strand implements Serializable{
 	}
 	
 	//Returns the strand-relative residue number of the residue with PDB residue number pdbResNum
-	public int mapPDBresNumToStrandResNum(int pdbResNum){
+        public int mapPDBresNumToStrandResNum(String pdbResNum){
 		for (int i=0; i<numberOfResidues; i++){
-			if (residue[i].getResNumber()==pdbResNum){
+                        if ((residue[i].getResNumber()).equals(pdbResNum)){
 				return residue[i].strandResidueNumber;
 			}
 		}

@@ -84,8 +84,8 @@ public class Backrubs implements Serializable {
 	//		so that the H-bonding positions of CO and NH are roughly preserved
 	public double[] applyBackrub(Molecule m, int strandNum, int resNum, double theta1, boolean computeSmallRot, double theta2, double theta3){
 		
-		if ( ((resNum==0)||(m.strand[strandNum].residue[resNum-1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()-1))
-				|| ((resNum==(m.strand[strandNum].numberOfResidues-1))||(m.strand[strandNum].residue[resNum+1].getResNumber()!=m.strand[strandNum].residue[resNum].getResNumber()+1)) ) {
+                if ( ((resNum==0)||(m.residuesAreBBbonded(strandNum, resNum-1, strandNum, resNum)))
+                                || ((resNum==(m.strand[strandNum].numberOfResidues-1))||(m.residuesAreBBbonded(strandNum, resNum, strandNum, resNum+1))) ) {
 			System.out.println("ERROR: Backrubs cannot be applied for residue "+m.strand[strandNum].residue[resNum].getResNumber());
 			System.exit(1);
 		}

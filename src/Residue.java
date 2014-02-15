@@ -258,10 +258,11 @@ public class Residue implements Serializable {
 	// This function returns the residue number (not the sequential one,
 	//  but the 'true' one from the pdb file).  If the pdb doesn't have
 	//  one (unlikely) then use the sequential numbering
-	public int getResNumber() {
+        //  PGC 2013: Residue number from the BD is now a String
+        public String getResNumber() {
 		if (fullName.length() > 5)
-			return( (new Integer(getToken(fullName.substring(5),1)).intValue()) );
-		return (moleculeResidueNumber+1);
+                        return( (getToken(fullName.substring(5),1)) );
+                return Integer.toString(moleculeResidueNumber+1);
 	}
 
 	// This function rotates the specified atoms in the residue
@@ -503,6 +504,55 @@ public class Residue implements Serializable {
 
         }
 
+        // PGC 2013: The following methods will allow the comparison of two residues by their
+        //      PDB number even if they have Kabat numbering.
+        // Returns true if "r2_pdbResNum" precedes r1 anywhere in the PDB chain. Used for helix purposes.
+        public static boolean lessThanInPDBChain(String r2_pdbResNum, Residue r1){
+                String r1_pdbResNum = r1.getResNumber();
+                int r1_integerPart = getResNumIntegerPart(r1_pdbResNum);//Integer.valueOf(r1_pdbResNum.split("[0-9]")[0]);
+                String r1_kabatCharacter = getResNumKabatLetter(r1_pdbResNum);//r1_pdbResNum.split("[A-Z]*")[1];
+                int r2_integerPart = getResNumIntegerPart(r2_pdbResNum);//Integer.valueOf(r2_pdbResNum.split("[0-9]")[0]);
+                String r2_kabatCharacter = getResNumKabatLetter(r2_pdbResNum);//r1_pdbResNum.split("[A-Z]*")[1];
+                if(r2_integerPart < r1_integerPart){
+                        return true;
+                }
+                else if(r1_integerPart < r2_integerPart){
+                        return false;
+                }
+                else if( r2_kabatCharacter.compareTo(r1_kabatCharacter) == -1){
+                        return true;
+                }
+                else{
+                        return false;
+                }
 
+        }
+     // Returns true if r2_pdbResNum precedes r1 in the PDB chain. (e.g. residue 19 precedes residue 20g)
+        public static boolean lessThanOrEqualInPDBChain(String r2_pdbResNum, Residue r1){
+                String r1_pdbResNum = r1.getResNumber();
+                if (r2_pdbResNum.compareTo(r1_pdbResNum)  == 0){
+                        return true;
+                }
+                else{
+                        return lessThanInPDBChain(r2_pdbResNum, r1);
+                }
+        }
 
+        //splitting a residue number in string form into integer and character parts
+        public static int getResNumIntegerPart(String resNumString){
+            String resNumTrimmed = resNumString.trim();
+            if( Character.isDigit( resNumTrimmed.charAt(resNumTrimmed.length()-1) ) )//resNumTrimmed ends with a digit
+                return Integer.valueOf(resNumTrimmed);//so it's all the integer part
+            else//remove last character, take the rest as integer part
+                return Integer.valueOf( resNumTrimmed.substring(0, resNumTrimmed.length()-1) );
+        }
+        
+        public static String getResNumKabatLetter(String resNumString){
+            String resNumTrimmed = resNumString.trim();
+            if( Character.isDigit( resNumTrimmed.charAt(resNumTrimmed.length()-1) ) )//resNumTrimmed ends with a digit
+                return "";
+            else//remove last character, take the rest as integer part
+                return resNumTrimmed.substring(resNumTrimmed.length()-1, resNumTrimmed.length());
+        }
+        
 }

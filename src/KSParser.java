@@ -536,6 +536,7 @@ public class KSParser
 		catch (Exception e){
 			System.out.println("WARNING: An error occurred while reading file");
 			System.out.println(e);
+                        e.printStackTrace();
 			System.exit(1);
 		}
 		
@@ -3184,7 +3185,10 @@ public class KSParser
 		boolean doMinimize = (new Boolean((String)sParams.getValue("DOMINIMIZE", "false"))).booleanValue();
 		boolean minimizeBB = (new Boolean((String)sParams.getValue("MINIMIZEBB", "false"))).booleanValue();
 		boolean doBackrubs = (new Boolean((String)sParams.getValue("DOBACKRUBS", "false"))).booleanValue();
-		String backrubFile = "";
+		//from Pablo
+                EnvironmentVars.useMPLP = (new Boolean((String)sParams.getValue("USEMPLP", "false"))).booleanValue();
+
+                String backrubFile = "";
 		if(doBackrubs){
 			backrubFile = ((String)sParams.getValue("BACKRUBFILE"));
 		}
@@ -5734,13 +5738,10 @@ public class KSParser
 		int[] mutRes2Strand = mp.mutRes2Strand;
 		int [] mutRes2StrandMutIndex = mp.mutRes2StrandMutIndex;*/
 		String[][] strandDefault = new String [mp.m.strand.length][];
-		int[][] strandPDBnum = new int[mp.m.strand.length][];
 		for(int str=0; str<strandDefault.length;str++){
 			strandDefault[str] = new String[m.strand[str].numberOfResidues];
-			strandPDBnum[str] = new int[m.strand[str].numberOfResidues];
 			for(int i=0; i<m.strand[str].numberOfResidues;i++){
 				strandDefault[str][i] = m.strand[str].residue[i].name;
-				strandPDBnum[str][i] = m.strand[str].residue[i].getResNumber();
 			}
 		}
 		
@@ -6635,7 +6636,8 @@ public class KSParser
 		
 		String runName = (String)sParams.getValue("RUNNAME");
 		int numRes = (new Integer((String)sParams.getValue("NUMRES"))).intValue();
-		int pdbRes[] = new int[numRes];
+                // PGC 2013: support for kabat numbering by using strings
+                String pdbRes[] = new String[numRes];
 		double dist[] = new double[numRes];
 		boolean ligPresent = (new Boolean((String)sParams.getValue("LIGPRESENT"))).booleanValue();
 		String ligType = null;
@@ -6645,7 +6647,7 @@ public class KSParser
 		String resString = (String)sParams.getValue("RESIDUES");
 		String distString = ((String)sParams.getValue("DIST"));
 		for (int i=0; i<numRes; i++){
-			pdbRes[i] = new Integer((String)getToken(resString,i+1)).intValue();
+                        pdbRes[i] = (String)getToken(resString,i+1);
 			dist[i] = new Double((String)getToken(distString,i+1)).doubleValue();
 		}
 		
@@ -6660,7 +6662,7 @@ public class KSParser
 		int curRes = 0;
 		for (int i=0; i<m.numberOfResidues; i++){
 			for (int j=0; j<numRes; j++){
-				if (m.residue[i].getResNumber()==pdbRes[j]){
+                                if (m.residue[i].getResNumber().equals(pdbRes[j])){
 					residues[curRes] = i;
 					curRes++;
 					break;
@@ -6820,11 +6822,11 @@ public class KSParser
 			int stri = mutRes2Strand[i];
 			int strResNumi = strandMut[stri][mutRes2StrandMutIndex[i]];
 				
-			int pdbResNum1 = m.strand[stri].residue[strResNumi].getResNumber();
+                        String pdbResNum1 = m.strand[stri].residue[strResNumi].getResNumber();
 			for (int j=i+1; j<numMutable; j++){
 				int strj = mutRes2Strand[j];
 				int strResNumj = strandMut[strj][mutRes2StrandMutIndex[j]];
-				int pdbResNum2 = m.strand[strj].residue[strResNumj].getResNumber();
+                                String pdbResNum2 = m.strand[strj].residue[strResNumj].getResNumber();
 				
 				logPS.println(pdbResNum1+" "+pdbResNum2+" "+dist[i][j]+" "+eInteraction[i][j]);
 				if ( (dist[i][j]<=distCutoff) && (eInteraction[i][j]>eInteractionCutoff) ) //these two residues interact
@@ -7322,6 +7324,7 @@ private int[] rotamersRemaining(int numRotForRes[], PrunedRotamers<Boolean> prun
             catch (Exception e){
                 System.out.println("WARNING: An error occurred while reading file");
                 System.out.println(e);
+                e.printStackTrace();
                 System.exit(1);
             }
 
