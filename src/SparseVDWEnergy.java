@@ -296,8 +296,13 @@ public class SparseVDWEnergy extends EnergyFunction implements Serializable {
     void initSharedMolec(Molecule m2){
         sharedMolec = m2;
         sharedAtomNums = new int[2*numTerms];
-        for(int a=0; a<2*numTerms; a++)
+        for(int a=0; a<2*numTerms; a++){
             sharedAtomNums[a] = sharedMolec.residue[resNums[a]].getAtomNameToMolnum(atomNames[a]);
+            if(sharedAtomNums[a]==-1){
+                throw new RuntimeException("ERROR applying SparseVDWEnergy to shared molecule: Can't find atom "+atomNames[a]+
+                        " in residue "+sharedMolec.residue[resNums[a]].fullName);
+            }
+        }
     }
 
     

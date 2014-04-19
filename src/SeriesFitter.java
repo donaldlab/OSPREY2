@@ -60,6 +60,7 @@ import cern.jet.math.Functions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.TreeSet;
 
 
@@ -192,7 +193,7 @@ public class SeriesFitter {
                     for(double param : v)
                         System.out.println(param);
 
-                    System.exit(1);
+                    throw new RuntimeException("Infinite or nan residual");
                 }
 
                 //if want sample-by-sample output
@@ -251,13 +252,49 @@ public class SeriesFitter {
         }
 
 
-        double weights2[] = weights.clone();
+        //now set up the data for the iterative fits
+        //samples can be turned on and off using fitWeights
+        //we will need to create two entries for samples with trueVals between bCutoff and bCutoff2
+        //since they may be turned on either to penalize deviation from bCutoff or from trueVal
+        
+        //first entry for each entry will penalize deviation from bCutoff if trueVal>=bCutoff
+        //secondEntries are for trueVals between bCutoff and bCutoff2
+        ArrayList<Integer> secondEntries = new ArrayList<>();//list of samples needing second entry
+        HashMap<Integer,Integer> revSecondEntries = new HashMap<>();//reverse lookup
         for(int s=0; s<numSamples; s++){
-            
-            
-            if(trueVals[s]>=bCutoffs[s])
-                weights2[s] = 0;
+            if( (trueVals[s]>=bCutoffs[s]) && (trueVals[s]<bCutoffs2[s]) ){//as in isRestraintActive
+                revSecondEntries.put(s,secondEntries.size());
+                secondEntries.add(s);
+            }
         }
+        
+        int numRestraints = numSamples+secondEntries.size();
+        
+        //data for basic least-squares fits
+        DoubleMatrix1D[] fitSamp = new DoubleMatrix1D[numRestraints];
+        double fitTrueVals[] = new double[numRestraints];
+        double fitWeights[] = new double[numRestraints];
+        
+        
+        for(int s=0; s<numSamples; s++){//"normal" entries
+            fitSamp[s] = samp[s];
+            
+            if(trueVals[s]>=bCutoffs[s]){
+                fitWeights[s] = 0;
+                fitTrueVals[s] = bCutoffs[s];
+            }
+            else {
+                fitWeights[s] = weights[s];
+                fitTrueVals[s] = trueVals[s];
+            }
+        }
+        for(int s2=0; s2<secondEntries.size(); s2++){
+            fitSamp[numSamples+s2] = samp[secondEntries.get(s2)];
+            fitWeights[numSamples+s2] = 0;
+            fitTrueVals[numSamples+s2] = trueVals[secondEntries.get(s2)];
+        }
+        
+        
         //Initial guess of set P is all points with trueVals[s] >= bCutoff
         //that is, all points that have possible series values that make the restraint inactive
 
@@ -275,26 +312,26 @@ public class SeriesFitter {
         boolean firstFit = true;//first fit is not an update
         DoubleMatrix1D c = DoubleFactory1D.dense.make(numParams);//matrices we update (used in fit)
         DoubleMatrix2D M = DoubleFactory2D.dense.make(numParams,numParams);
-        double oldWeights2[] = null;
-
+        double oldFitWeights[] = null;
+        
         while(!done){
 
             if(firstFit){
-                coeffs = fitSeries(samp, trueVals, weights2, lambda,
+                coeffs = fitSeries(fitSamp, fitTrueVals, fitWeights, lambda,
                     includeConst, order, PCOrder, isPC, false, c, M);
 
                 firstFit = false;
             }
             else{
-                double weightDiffs[] = weights2.clone();
-                for(int s=0; s<numSamples; s++)
-                    weightDiffs[s] -= oldWeights2[s];
+                double weightDiffs[] = fitWeights.clone();
+                for(int s=0; s<numRestraints; s++)
+                    weightDiffs[s] -= oldFitWeights[s];
 
-                coeffs = fitSeries(samp, trueVals, weightDiffs, lambda,
-                    includeConst, order, PCOrder, isPC, true, c, M);
+                coeffs = fitSeries(fitSamp, fitTrueVals, weightDiffs, lambda,
+                    includeConst, order, PCOrder, isPC, true, c, M);                
             }
             
-            oldWeights2 = weights2.clone();
+            oldFitWeights = fitWeights.clone();
 
 
             done = true;
@@ -316,32 +353,68 @@ public class SeriesFitter {
 
 
                 //check for doneness first, using tolerance
-                //i.e. are coeffs (derived from weights2) consistent with weights2,
+                //i.e. are coeffs (derived from fitWeights) consistent with fitWeights,
                 //within numerical error?  If so we have a global minimum
 
-                if( (weights2[s]==0 && isRestraintActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],1e-6) ) ||
-                        (weights2[s]>0 && !isRestraintActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],-1e-6) ) ) {
-                        
-                    done = false;
-                }
                 
-
-                //Now calculate mean residual and crossing points, and update weights2
-                //if( trueVals[s]>=bCutoffs[s] && serVals[s]>=bCutoffs[s] ){
-                if(!isRestraintActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],0)){
-                    weights2[s] = 0;
-                }
-                else{
-                    double residTrueVal = trueVals[s];//true value to be used for residual
-                    if(trueVals[s]>bCutoffs[s] && serVals[s]<bCutoffs[s])
-                        residTrueVal = bCutoffs[s];
+                if( trueVals[s]>=bCutoffs[s] ){
+                    if(fitWeights[s]>0){
+                        if(!isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],false,-1e-6))
+                            done = false;//fitWeights penalizing deviation from bCutoff, and this isn't right at coeffs
+                    }
+                    else {
+                        boolean secondRestraintOn = revSecondEntries.containsKey(s);
+                        if(secondRestraintOn)
+                            secondRestraintOn = (fitWeights[numSamples+revSecondEntries.get(s)]>0);
                         
-                    double residTerm = (residTrueVal-serVals[s])*(residTrueVal-serVals[s]);
-                  
-                    meanResidual += weights[s]*residTerm;
-                    weights2[s] = weights[s];
+                        if(secondRestraintOn){
+                            if(!isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],true,-1e-6))
+                                done = false;//fitWeights penalizing deviation from trueVal, and this isn't right at coeffs
+                        }
+                        else {//restraints currently off
+                            if(isRestraintActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],1e-6))
+                                done = false;//a restraint should be on at coeffs
+                        }
+                    }
                 }
-
+                //for trueVals below bCutoff, restraints don't turn on and off
+                  
+                
+                //Now calculate mean residual and crossing points, and update fitWeights
+                double residTerm = 0;
+                
+                                
+                if( trueVals[s]>=bCutoffs[s] ){
+                    if(isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],false)){
+                        //activate penalty for deviating from bCutoff
+                        fitWeights[s] = weights[s];
+                        if(revSecondEntries.containsKey(s))
+                            fitWeights[numSamples+revSecondEntries.get(s)] = 0;
+                        residTerm = (serVals[s]-bCutoffs[s])*(serVals[s]-bCutoffs[s]);
+                    }
+                    else if(isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],true)){
+                        //activate penalty for deviating from trueVal
+                        fitWeights[s] = 0;
+                        if(revSecondEntries.containsKey(s))
+                            fitWeights[numSamples+revSecondEntries.get(s)] = weights[s];
+                        else
+                            throw new RuntimeException("ERROR: should have second entry for restraint but don't!!");
+                        residTerm = (serVals[s]-trueVals[s])*(serVals[s]-trueVals[s]);
+                    }
+                    else {
+                        //deactivate all penalties
+                        fitWeights[s] = 0;
+                        if(revSecondEntries.containsKey(s))
+                            fitWeights[numSamples+revSecondEntries.get(s)] = 0;
+                        //no contribution to residual
+                    }
+                }
+                else //normal least-squares penalty.  fitWeights[s] will stay at weights[s] 
+                    residTerm = (serVals[s]-trueVals[s])*(serVals[s]-trueVals[s]);
+               
+                
+                meanResidual += weights[s]*residTerm;
+                
 
                 //If want sample-by-sample output...
                 //System.out.println("TRAININGSET TRUE: "+trueVals[s]+" SER: "+serVals[s]);
@@ -356,9 +429,9 @@ public class SeriesFitter {
 
 
 
-
-
-
+            
+            
+            
             if( (!done) && (meanResidual>=prevResid) ) {
                 //Did not obtain a decrease using the Newton step
                 //Let's do an exact line search to rectify the situation
@@ -528,19 +601,27 @@ public class SeriesFitter {
 
                     if( trueVals[s]>=bCutoffs[s] ){
                         if(isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],false)){
+                            //activate penalty for deviating from bCutoff
+                            fitWeights[s] = weights[s];
+                            if(revSecondEntries.containsKey(s))
+                                fitWeights[numSamples+revSecondEntries.get(s)] = 0;
                             minResid += weights[s]*(serVals[s]-bCutoffs[s])*(serVals[s]-bCutoffs[s]);
-                            weights2[s] = weights[s];
                         }
                         else if(isRestraintTypeActive(trueVals[s],serVals[s],bCutoffs[s],bCutoffs2[s],true)){
                             minResid += weights[s]*(serVals[s]-trueVals[s])*(serVals[s]-trueVals[s]);
-                            weights2[s] = weights[s];
+                            //activate penalty for deviating from trueVal
+                            fitWeights[s] = 0;
+                            fitWeights[numSamples+revSecondEntries.get(s)] = weights[s];
                         }
-                        else
-                            weights2[s] = 0;
+                        else {
+                            //deactivate all penalties
+                            fitWeights[s] = 0;
+                            if(revSecondEntries.containsKey(s))
+                                fitWeights[numSamples+revSecondEntries.get(s)] = 0;
+                        }
                     }
                     else
                         minResid += weights[s]*(serVals[s]-trueVals[s])*(serVals[s]-trueVals[s]);
-                    
                 }
 
                 minResid /= weightSum;
@@ -559,8 +640,8 @@ public class SeriesFitter {
 
                 meanResidual = minResid;
             }
-
-
+                
+                
             oldCoeffs = coeffs;
             System.out.println("STEP RESIDUAL: "+meanResidual);
             prevResid = meanResidual;
@@ -585,18 +666,22 @@ public class SeriesFitter {
     }
     
     
-    static boolean isRestraintTypeActive(double trueVal, double serVal, double bCutoff, double bCutoff2, boolean type){
+    static boolean isRestraintTypeActive(double trueVal, double serVal, double bCutoff, double bCutoff2, boolean type, double tol){
         //If type is false, check if the ordinary restraint (2-sided if below trueVal<bCutoff; lower restraint centered at bCutoff
         //otherwise) is active
         //If type is true, check if the upper restraint (penalizing serVal>trueVal for bCutoff<=trueVal<bCutoff2) is active
         if(type)
-            return (trueVal>=bCutoff) && (trueVal<bCutoff2) && (serVal>trueVal);
+            return (trueVal>=bCutoff) && (trueVal<bCutoff2) && (serVal>trueVal+tol);
         else
-            return (trueVal<bCutoff || serVal<bCutoff);
+            return (trueVal<bCutoff || serVal<bCutoff-tol);
+    }
+    
+    static boolean isRestraintTypeActive(double trueVal, double serVal, double bCutoff, double bCutoff2, boolean type){
+        //default tolerance is 0
+        return isRestraintTypeActive(trueVal,serVal,bCutoff,bCutoff2,type,0);
     }
     
     
-
     private static class SampleCutoffCrossing implements Comparable {
         //These are samples whose trueVal is above bCutoff
         //and whose series approximation crosses bCutoff
@@ -646,8 +731,7 @@ public class SeriesFitter {
         //we support orders 2-6
         //and PCOrder may range up to 6 (but has no effect if <=order)
         if(order<2||order>6||PCOrder>6){
-            System.err.println("ERROR: SeriesFitter.evalSeries does not support order "+order+" and/or PCOrder "+PCOrder);
-            System.exit(1);
+            throw new RuntimeException("ERROR: SeriesFitter.evalSeries does not support order "+order+" and/or PCOrder "+PCOrder);
         }
         
             //evaluate series at point x from flat-array coefficients

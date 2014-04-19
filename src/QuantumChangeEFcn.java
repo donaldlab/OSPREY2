@@ -139,29 +139,36 @@ public class QuantumChangeEFcn extends EnergyFunction {
         //we need more precision...the little bond length/angle fluctuations from PDB roundoff 
         //seem to dominate the dihedral-related energy changes
         
-        try{
-            //writeNWFile();
-            BufferedWriter bw=new BufferedWriter(new FileWriter(NWChemFolder+"/molec.coords.txt"));
-            for(int a=0; a<aspartame.numberOfAtoms; a++){
-                double x[] = aspartame.getActualCoord(a);
-                bw.append( "\t"+aspartame.atom[a].elementType+
-                        " "+x[0]+" "+x[1]+" "+x[2] );
-                bw.newLine();
-            }
+        for(int tryNum=0; true; tryNum++){
             
-            bw.close();
+            try{
+                //writeNWFile();
+                BufferedWriter bw=new BufferedWriter(new FileWriter(NWChemFolder+"/molec.coords.txt"));
+                for(int a=0; a<aspartame.numberOfAtoms; a++){
+                    double x[] = aspartame.getActualCoord(a);
+                    bw.append( "\t"+aspartame.atom[a].elementType+
+                            " "+x[0]+" "+x[1]+" "+x[2] );
+                    bw.newLine();
+                }
 
-            
-            Process p = Runtime.getRuntime().exec(NWChemFolder+"/getE_SCF");
-            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            E = Double.valueOf( br.readLine().trim() );
-            E *= 627.509469;//convert from hartrees (NWChem unit) to kcal/mol (OSPREY unit)
-            br.close();
-        }
-        catch(Exception e){
-            System.err.println(e.getMessage());
-            e.printStackTrace();
-            System.exit(1);
+                bw.close();
+
+
+                Process p = Runtime.getRuntime().exec(NWChemFolder+"/getE_SCF");
+                BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                E = Double.valueOf( br.readLine().trim() );
+                E *= 627.509469;//convert from hartrees (NWChem unit) to kcal/mol (OSPREY unit)
+                br.close();
+                break;
+            }
+            catch(Exception e){
+                
+                if(tryNum>5)
+                    throw new RuntimeException("ERROR evaluating quantum energy, even with retrying "+e.getMessage());
+                else {
+                    System.out.println("Warning: Needing to retry quantum energy: "+e.getMessage());
+                }
+            }
         }
 
         return E;

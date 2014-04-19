@@ -297,6 +297,20 @@ class PDBChemModel {
                     newResidue.getAtomByName("HA2").name = "HA3";
                     HA1.name = "HA2";
                 }
+                
+                //let's also convert 1HA/2HA and 2HA/3HA systems for glycine
+                Atom at2HA = newResidue.getAtomByName("2HA");
+                if( at2HA != null ){
+                    Atom at1HA = newResidue.getAtomByName("1HA");
+                    if(at1HA!=null){//convert 1HA/2HA to HA2/HA3
+                        at1HA.name = "HA2";
+                        at2HA.name = "HA3";
+                    }
+                    else {//convert 2HA/3HA to HA2/HA3
+                        at2HA.name = "HA2";
+                        newResidue.getAtomByName("3HA").name = "HA3";
+                    }
+                }
         }
 
         public void assignSecStruct(Molecule m, ArrayList<Integer> helixStarts, ArrayList<Integer> helixEnds,

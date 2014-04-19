@@ -3065,24 +3065,28 @@ public class RotamerSearch implements Serializable
 				//numConfsLeft = (numConfsTotal-numConfsPrunedByMinDEE); //MinDEE should have already been applied
 
                                 //if doing EPIC and checking thresholds need the lowest bound without polynomial fits
+                                es.lowestBound = 0;
                                 if(es.useEPIC && es.enforceEPICThresh){
                                     System.out.println("Getting lowest-bound energy...");
                                     es.gettingLowestBound = true;
+                                    es.lowestBound = Double.NaN;//this value will be used if no conformations are available
                                     slaveRotamerSearchAStar(maxDepth, strandMut, minimizeBB, saveConfs, fName, doBackrubs,
 						saveTopConfs, printTopConfs, numTopConfs, useMaxKSconfs, maxKSconfs);
                                     es.gettingLowestBound = false;
                                     System.out.println("Got lowest bound: "+es.lowestBound);
                                 }
                                 
+                                if(!Double.isNaN(es.lowestBound)){//if no conformations available for lower bound, no point in doing full A*
+
+                                    long AStarStartTime = System.currentTimeMillis();
+
+                                    //Perform A* search: compute the partial partition function q*
+                                    slaveRotamerSearchAStar(maxDepth, strandMut, minimizeBB, saveConfs, fName, doBackrubs,
+                                                    saveTopConfs, printTopConfs, numTopConfs, useMaxKSconfs, maxKSconfs);
+
+                                    System.out.println("Partition function time (ms): "+(System.currentTimeMillis()-AStarStartTime));
+                                }
                                 
-                                long AStarStartTime = System.currentTimeMillis();
-
-				//Perform A* search: compute the partial partition function q*
-				slaveRotamerSearchAStar(maxDepth, strandMut, minimizeBB, saveConfs, fName, doBackrubs,
-						saveTopConfs, printTopConfs, numTopConfs, useMaxKSconfs, maxKSconfs);
-
-                                System.out.println("Partition function time (ms): "+(System.currentTimeMillis()-AStarStartTime));
-
 				//Print the top structures
 				if((saveTopConfs || printTopConfs) && runNum >= 0){
 					ConfPair confPairs[] = new ConfPair[topConfs.size()];
@@ -4796,9 +4800,11 @@ public class RotamerSearch implements Serializable
                             minTimeEPIC = lmin.minTime;
                             double LSBE = lof.getValue( lminVals );//comput continuous energy term contribution to energy bound
 
-                            EPICMinVals = DoubleFactory1D.dense.make(lof.sveOFMap.length);
-                            for(int dof=0; dof<lof.sveOFMap.length; dof++)
-                                EPICMinVals.set(dof, lminVals.get(lof.sveOFMap[dof]));
+                            if(es.useSVE){//we have cof, lof.sveOFMap
+                                EPICMinVals = DoubleFactory1D.dense.make(lof.sveOFMap.length);
+                                for(int dof=0; dof<lof.sveOFMap.length; dof++)
+                                    EPICMinVals.set(dof, lminVals.get(lof.sveOFMap[dof]));
+                            }
                             
                             polyE = minELowerBound + LSBE;
                             double noShellShell = polyE - arpMatrix.getShellShellE();
@@ -4898,6 +4904,9 @@ public class RotamerSearch implements Serializable
 			
 			else{
                                 if(es.checkEPIC || !es.useEPIC){
+                                    
+                                    double checkminE = 0;//Check EPIC energy using real energy function
+                                    
                                     if (computeEVEnergy){
                                             a96ff.calculateTypesWithTemplates();
                                             a96ff.initializeCalculation();
@@ -4939,10 +4948,9 @@ public class RotamerSearch implements Serializable
                                                         minE = (double)efunc.getEnergy();
                                                         
                                                         
-                                                        if(es.useEPIC){
+                                                        if(es.useEPIC && es.useSVE){
                                                             ccdMin.objFcn.setDOFs(EPICMinVals);
-                                                            double checkminE = (double)efunc.getEnergy();
-                                                            System.out.println("Full energy function evaluated at EPIC minimum: "+checkminE);
+                                                            checkminE = (double)efunc.getEnergy();
                                                         }
                                                     }
                                                     else{
@@ -4976,11 +4984,16 @@ public class RotamerSearch implements Serializable
                                             totEref = getTotSeqEref(eRef,numMutable,strandMut);
                                     if (EnvironmentVars.useEntropy)
                                             totEntropy = getTotSeqEntropy(strandMut);
-                                    unMinE -= totEref;
-                                    minE -= totEref;
+                                    unMinE += totEntropy - totEref;
+                                    minE += totEntropy - totEref;
                                     
                                     if(es.checkEPIC)//record different conformational energy estimates
                                         CETRecord.add(new double[]{minELowerBound,polyE,minE,minTime,minTimeEPIC});
+                                    
+                                    checkminE += totEntropy - totEref;
+                                    
+                                    if(es.useEPIC && es.useSVE)
+                                        System.out.println("Full energy function evaluated at EPIC minimum: "+checkminE);
                                 }
                                 
                                 
