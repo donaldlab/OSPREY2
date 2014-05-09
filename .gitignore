@@ -1,5 +1,5 @@
 *.class
-*.jar
+# uncommenting jars for lib dir  *.jar
 
 .*
 !.gitignore
