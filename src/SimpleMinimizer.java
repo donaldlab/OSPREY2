@@ -848,7 +848,14 @@ public class SimpleMinimizer implements Serializable {
 		double bckpStrCoords[] = backupStrCoord(strNumber); //backup actual ligand coordinates
 		double initE[] = a96ff.calculateTotalEnergy(m.actualCoordinates, -1); //compute energy before translation/rotation
 	
-		a96ff.calculateGradient(-1); //calculate the gradient (perhaps eventually just calculate part of the gradient)
+		//find strand rotTrans index
+		int index = 0;
+		for(int i=0; i<strNumber;i++){
+			if(m.strand[i].rotTrans)
+				index++;
+		}
+		
+		a96ff.calculateGradient(totalFlexRes+index); //calculate the gradient (perhaps eventually just calculate part of the gradient)
 		//a96ff.calculateEVGradientPartWithArrays(ligResNumPP);
 		computeStrTorqueTrans(strNumber, strTorque, strTrans);
 		applyStrTorqueTrans(strNumber, strTorque, RotStep, strTrans, TransStep, MaxTrans);
